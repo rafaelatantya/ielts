@@ -1198,6 +1198,34 @@ flowchart TB
 | **7** | **Background Tab Timer Drift (Writing 40m / Reading 60m)** | Browsers throttle `setInterval(fn, 1000)` when the user switches tabs or minimizes the window. | **Monotonic Wall-Clock Deadline**: Timer state stores `deadline_ms = Date.now() + duration_ms` in SQLite and computes `remaining = deadline_ms - Date.now()` on every frame + `visibilitychange`. Writing drafts auto-save to OPFS every $1,500\text{ ms}$. |
 | **8** | **Storage Quota Full (`QuotaExceededError`) & Incognito Mode** | Browser runs out of disk quota mid-download, or user opens app in Private/Incognito window (which wipes OPFS on close). | **Pre-Download Quota Check & Incognito Banner**: Calls `navigator.storage.estimate()` before downloading models (requires $1.25\times$ free space). Detects ephemeral/incognito storage and shows a persistent reminder to export `.ieltsbackup` before closing. |
 | **9** | **iOS Safari AudioContext Suspended / Sample Rate Mismatch** | iOS Safari forces hardware sample rate ($44.1\text{ kHz}$ or $48\text{ kHz}$) and suspends `AudioContext` unless resumed inside a direct tap handler. | **Sinc Resampler in Worklet + Tap-to-Unlock**: `AudioWorklet` resamples any native hardware rate ($44.1/48\text{ kHz}$) to exact $16,000\text{ Hz}$ mono PCM, and `audioCtx.resume()` is bound directly to the user's button pointer-down event. |
+| **10** | **Wrong Microphone Selected / Empty Device Labels / USB Mic Hot-Plug** | Calling `enumerateDevices()` before permission grant returns blank labels; plugging in a USB/Bluetooth mic mid-session is ignored by static pages. | **Permission-First Enumeration + `ondevicechange` Live Listener + Hot-Swap Switcher**: Requests `getUserMedia` first to unlock hardware labels, auto-refreshes the dropdown on USB/Bluetooth plug/unplug, persists `preferred_mic_device_id`, and supports 3-second loopback test playback. |
+
+### 13.3 Studio Microphone Selector, Live `devicechange` Hot-Swapping & Loopback Tester (Mermaid)
+
+Users who switch between a built-in laptop mic, a USB condenser mic, and Bluetooth/TWS earbuds need explicit, zero-pain microphone control at all times:
+
+```mermaid
+flowchart LR
+    CLICK["User Clicks [Select / Change Mic] Pill"] --> PERM["Call getUserMedia({ audio: true })<br/>Unlocks Hardware Device Labels in Browser"]
+    PERM --> ENUM["navigator.mediaDevices.enumerateDevices()<br/>Filter kind === 'audioinput'"]
+    ENUM --> LIST["Render Live Microphone Dropdown:<br/>- FIFINE K669 USB Microphone<br/>- AirPods Pro Hands-Free<br/>- Internal Dual-Mic Array"]
+    HOT["USB / Bluetooth Mic Plugged or Unplugged<br/>(mediaDevices.ondevicechange)"] --> ENUM
+
+    LIST --> SELECT["User Selects Target Mic (deviceId)"]
+    SELECT --> STREAM["getUserMedia({ audio: { deviceId: { exact: id } } })<br/>Stop Old Tracks & Re-route AudioWorklet Node"]
+    STREAM --> METER["Live dBFS Input VU Meter + Noise Floor Badge<br/>+ [3s Test & Loopback Playback] Button"]
+    STREAM --> SAVE["Persist preferred_mic_device_id in localStorage"]
+```
+
+#### Key Microphone UX Guarantees:
+1. **Explicit `[🎙️ Select Microphone]` Button & Live Dropdown in Top Bar of Speaking Lab**:
+   - Clicking `[Grant & Select Mic]` triggers the browser's native microphone permission prompt (`getUserMedia`) and immediately populates the dropdown with exact hardware names.
+2. **Real-Time USB / Bluetooth Hot-Plug Detection (`navigator.mediaDevices.ondevicechange`)**:
+   - The instant a user plugs in a USB microphone or connects Bluetooth earbuds, the dropdown list updates automatically without refreshing the page.
+3. **3-Second "Test & Hear My Mic" Loopback Button**:
+   - Records a $3\text{-second}$ sample from the currently selected `deviceId`, displays peak dBFS & background SNR (`Quiet Room` vs `Noisy Background`), and immediately plays the clip back so the user is 100% certain the right microphone is active before starting the timer.
+4. **Mid-Session Hot-Swap Without Losing Progress**:
+   - Even if a session is paused mid-exam, selecting a different microphone cleanly stops the old `MediaStreamTrack` and connects the new `MediaStreamAudioSourceNode` into the active `AudioWorklet` pipeline.
 
 ---
 
