@@ -149,6 +149,7 @@ export const FeaturesPage: React.FC = () => {
     return initial
   })
 
+  const timersRef = useRef<Record<string, number | null>>({})
   const verifyTimersRef = useRef<Record<string, number | null>>({})
 
   // Handle CDN change
