@@ -363,6 +363,42 @@ where $\mathcal{V}$ is the set of already-verified chunk indices in SQLite.
 
 ---
 
+### 5.5 Strict Zero-Auto-Download Policy: `/features` Tab & Contextual Speaking Opt-In
+
+To protect users on metered mobile data or cellular hotspots, **no AI model is ever downloaded automatically on page load or silently in the background without explicit user consent**.
+
+```mermaid
+flowchart TD
+    BOOT["User Opens Web App<br/>(0 MB AI Models Auto-Downloaded)"] --> NAV{"Where Does User Navigate?"}
+
+    NAV -->|"Tab: /features (AI & Offline Packs)"| FEAT["Dedicated Feature & Model Manager Tab<br/>Shows exact MB size, storage used, & capabilities per pack:<br/>- Writing & Grammar Pack (6.1 MB / +55 MB Deep GEC)<br/>- Speaking Core Auto-Scoring Pack (76.2 MB)<br/>- Deep Pronunciation & Phoneme GOP Pack (36.0 MB)<br/>Actions: [Download] [Pause] [Resume] [Delete from Disk]"]
+
+    NAV -->|"Tab: /speaking (Speaking Simulator)"| CHECK{"Is Speaking AI Pack<br/>Ready in OPFS?"}
+
+    CHECK -->|"Yes (Status = ready)"| FULL["Launch Full Speaking Simulator<br/>with Instant Auto-Scoring"]
+
+    CHECK -->|"No (Not Downloaded or Paused)"| GATE["Show Contextual Opt-In Banner / Modal:<br/>Never auto-downloads without click!"]
+
+    GATE -->|"Option A: Click [Download Pack Now]"| DL["Start/Resume Multi-Point Download (76.2 MB)<br/>with Live Progress Bar & [Pause] Button"]
+    DL --> FULL
+
+    GATE -->|"Option B: Click [Practice Without Auto-Scoring (0 MB)]"| LITE["Lite Practice Mode (Zero Quota Used):<br/>- Full Part 1/2/3 Timer & Cue Cards<br/>- Records Voice to OPFS (/audio/attempts/*.opus)<br/>- Shows Band 8.5 Model Answer & Target Collocations<br/>- Saves attempt with status = 'unscored_audio'"]
+    LITE -.->|"Later on Wi-Fi: User downloads model"| RETRO["1-Click [Score Saved Recordings Now]<br/>Grades previously recorded .opus files retroactively!"]
+```
+
+#### Key UX Rules for Quota-Safe Model Management:
+1. **Dedicated `/features` (AI Feature Packs) Tab**:
+   - Displays all modular AI packs with exact byte sizes, verified chunk progress (e.g., `12/19 Chunks Verified — 48.0 MB / 76.2 MB saved on disk`), and `navigator.storage.estimate()` disk usage.
+   - Allows users to **Download**, **Pause**, **Resume**, or **Delete** individual model packs to free up disk space at any time without losing their SQLite study progress.
+2. **Contextual Opt-In When Entering Speaking (`/speaking`)**:
+   - If the user enters the Speaking Lab before downloading the Speaking AI Pack, the UI displays an explicit choice card instead of starting a download automatically.
+   - Checks `navigator.connection?.saveData` and `navigator.connection?.effectiveType` to display a friendly data-saver heads-up if the user is on a cellular connection.
+3. **Zero-Quota Lite Mode + Retroactive Scoring (`status = 'unscored_audio'`)**:
+   - Users who choose **"Practice Without Auto-Scoring (0 MB)"** can still record their Part 1, 2, and 3 answers (`~180 KB/min` Opus saved to OPFS) and study the pre-generated Band 8.5 model answers.
+   - Once they connect to Wi-Fi and download the Speaking AI Pack (either from `/features` or `/speaking`), a **"Score $N$ Saved Recordings"** button appears, running the full WASM/ONNX scoring pipeline retroactively on their saved `.opus` recordings!
+
+---
+
 ## 6. IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)
 
 ### 6.1 End-to-End Speaking Signal Flow (Mermaid)

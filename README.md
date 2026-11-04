@@ -19,7 +19,8 @@ A browser-native, **local-first** IELTS preparation web application covering **S
     4. **Lexical Profiler**: Bidirectional $\text{MTLD}$, Oxford CEFR ($\text{A1--C2}$) + Academic Word List SQLite lookup, and $6,500+$ Aho-Corasick collocation matcher.
     5. **Discourse Cross-Encoder**: `DeBERTa-v3-xsmall` (`25 MB`) + `bge-small-en-v1.5` (`22 MB`) for per-bullet Cue Card coverage and inter-sentence coherence.
   - **Stage 2 (Psychometric Band Calibrator)**: Ordinal LightGBM / MLP Calibrator (`0.4 MB` ONNX) trained on $10,000+$ examiner-graded IELTS samples (Quadratic Weighted Kappa loss).
-- **Zero-Pain Multi-Point Model Downloader & Crash-Resilient OPFS Resume**:
+- **Zero-Pain Multi-Point Model Downloader, Strict Opt-In Quota Protection & Crash-Resilient OPFS Resume**:
+  - **Strict Zero Auto-Download Policy**: Models are **never** downloaded automatically on boot or silently in the background. Users explicitly trigger downloads either from the dedicated **`/features` (AI Packs) Tab** or via an **Opt-In Prompt** when entering the Speaking Lab (with a `0 MB` Lite Recording Mode + **Retroactive Scoring** once models are downloaded on Wi-Fi).
   - **Unlimited Free Multi-CDN**: Primary **HuggingFace LFS Global CDN** + Secondary **Cloudflare R2 Custom Domain with `Cache Everything` Edge Rules** (unlimited free CDN cache hits, zero egress/request cost) + Tertiary **jsDelivr CDN**.
   - **Multi-Point Range Connections + OPFS Sparse Flush**: Models are fetched across $4\text{--}6$ parallel HTTP Range streams in $4\text{ MiB}$ SHA-256-verified chunks written directly via `FileSystemSyncAccessHandle.write(chunk, { at: offset })` + `flush()`. If the user closes the browser tab or the device dies at 63%, reopening the page resumes immediately from chunk $12$ with zero lost bytes.
 - **Local-First Persistence**:
