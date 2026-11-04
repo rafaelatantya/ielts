@@ -19,7 +19,7 @@
 7. [Writing, Reading, Listening & FSRS v5 Study Modules](#7-writing-reading-listening--fsrs-v5-study-modules)
 8. [Local-First Storage Architecture & ER Schema (Mermaid + SQL)](#8-local-first-storage-architecture--er-schema-mermaid--sql)
 9. [Deterministic Export & Import System (Backup / Restore / CRDT Merge)](#9-deterministic-export--import-system-backup--restore--crdt-merge)
-10. [Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)](#10-google-oauth-20--multi-device-hlc-sync-protocol-mermaid)
+10. [Google OAuth 2.0 & Manual Cloud Snapshot Sync on `/account` Tab (Mermaid)](#10-google-oauth-20--manual-cloud-snapshot-sync-on-account-tab-mermaid)
 11. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#11-cloudflare-free-tier-capacity-math--cost-guardrails)
 12. [Security, Privacy & Cross-Origin Isolation](#12-security-privacy--cross-origin-isolation)
 13. [Monorepo Structure & Phased Implementation Roadmap](#13-monorepo-structure--phased-implementation-roadmap)
@@ -47,8 +47,9 @@
      - **BGE-Small Embedding Encoder (`bge-small-en-v1.5` int8 ONNX, `~22 MB`)**: Computes cosine similarity between the user's response and the question's pre-computed semantic anchors in $< 15\text{ ms}$ to verify topic relevance and detect memorized off-topic scripts.
 4. **Sovereign Data Ownership (Export & Import)**
    - Users can export their entire progress at any time as a compact `.ieltsbackup` (`JSON.gz`) or a full `.ielts-archive.zip` (containing the SQLite database and `.opus` voice recordings) and import it on any device with **CRDT/HLC Smart Merge**.
-5. **Optional Google Login & Multi-Device Sync on Cloudflare Free Tier (USD 0/month)**
-   - Logging in with Google activates background **Hybrid Logical Clock (HLC) Delta Sync** to **Cloudflare D1** (relational rows) and **Cloudflare R2** (content-addressed `.opus` recordings).
+5. **Optional Google Login & Manual Cloud Snapshot Push/Pull on `/account` Tab (Zero Background Requests)**
+   - There is **zero automatic or constant background syncing** with the server. Even when logged in, practicing Speaking, Writing, Reading, Listening, or Flashcards generates **0 server requests**.
+   - To sync across devices, the user logs in with Google on the **`/account` Tab**, views a **Side-by-Side Timestamp & Progress Comparison** (`This Device` vs. `Cloud Snapshot`), and explicitly clicks either **"Upload Data to Cloud"** (replaces cloud snapshot with local device data) or **"Pull Data from Cloud"** (replaces local device data with cloud snapshot) after passing a **Double Confirmation Modal**.
 
 ---
 
@@ -58,41 +59,40 @@
 flowchart TB
     subgraph Browser["USER BROWSER (Client-Side PWA — COOP: same-origin-allow-popups | COEP: credentialless)"]
         direction TB
-        UI["Main Thread: React 19 + Vite + TanStack Router + Tailwind v4<br/>Speaking Simulator | Writing Split-Editor | Reading Annotator | Listening Player | FSRS Deck"]
+        UI["Main Thread: React 19 + Vite + TanStack Router + Tailwind v4<br/>Speaking Simulator | Writing Split-Editor | Reading Annotator | Listening Player | FSRS Deck | /features | /account"]
 
         subgraph Workers["Dedicated Web Workers & AudioWorklet (Zero Main-Thread Blocking)"]
             direction LR
-            DBW["db.worker.ts<br/>- SQLite-WASM (OPFS)<br/>- FSRS v5 Scheduler<br/>- HLC Stamp & CRDT Merge<br/>- fflate ZIP Export/Import"]
+            DBW["db.worker.ts<br/>- SQLite-WASM (OPFS)<br/>- FSRS v5 Scheduler<br/>- Snapshot Export/Import<br/>- Cloud Push/Pull Handler"]
+            DLW["model-downloader.worker.ts<br/>- 4-6 Parallel Range Streams<br/>- Per-Chunk SHA-256 Verify<br/>- OPFS Sparse Write & Flush"]
             DSPW["audio-dsp.worker.ts<br/>- 16kHz PCM Ring Buffer<br/>- Silero VAD v5 (ONNX)<br/>- pYIN Pitch (F0) & nPVI<br/>- MediaRecorder Opus"]
-            AIW["ai-scorer.worker.ts<br/>- Whisper-base.en ONNX<br/>- Wav2Vec2 Phoneme GOP<br/>- harper.js WASM Grammar<br/>- BGE-Small Semantic Vector<br/>- Kokoro/Piper TTS"]
-            SYNCW["sync.worker.ts<br/>- HLC Outbox Consumer<br/>- Delta Push / Pull Batcher<br/>- SHA-256 R2 Audio Uploader"]
+            AIW["ai-scorer.worker.ts<br/>- Whisper-base.en ONNX<br/>- Wav2Vec2 + GOPT<br/>- harper.js + Flan-T5-GEC<br/>- DeBERTa + QWK Calibrator"]
         end
 
         subgraph LocalStore["Browser Local Storage Layer"]
             direction LR
-            OPFS[("OPFS Disk<br/>/db/ielts.sqlite3<br/>/audio/attempts/*.opus")]
-            CACHE[("Cache API / IndexedDB<br/>Quantized ONNX Models<br/>& Static Question Packs")]
-            LSTOR[("localStorage<br/>device_id, theme,<br/>last_sync_hlc")]
+            OPFS[("OPFS Disk<br/>/db/ielts.sqlite3<br/>/models/*.onnx<br/>/audio/attempts/*.opus")]
+            LSTOR[("localStorage<br/>device_id, theme,<br/>local_last_updated_at")]
         end
 
         UI <-->|"Comlink RPC"| DBW
+        UI <-->|"Comlink RPC"| DLW
         UI <-->|"MessagePort / PCM"| DSPW
         UI <-->|"Comlink RPC"| AIW
-        UI <-->|"Comlink RPC"| SYNCW
 
         DBW <--> OPFS
+        DLW <--> OPFS
         DSPW --> OPFS
-        AIW <--> CACHE
-        SYNCW <--> DBW
-        SYNCW <--> LSTOR
+        AIW <--> OPFS
+        DBW <--> LSTOR
     end
 
-    subgraph Cloudflare["CLOUDFLARE EDGE INFRASTRUCTURE (100% Free Tier — Optional Sync)"]
+    subgraph Cloudflare["CLOUDFLARE EDGE INFRASTRUCTURE (100% Free Tier — On-Demand Only)"]
         direction TB
-        CFP["Cloudflare Pages<br/>Static SPA + Pre-Generated Question Packs"]
-        CFW["Cloudflare Workers (Hono API)<br/>- /api/auth/google/* (OIDC + PKCE)<br/>- /api/sync/push & /api/sync/pull<br/>- /api/audio/:sha256"]
-        CFD1[("Cloudflare D1 (SQLite)<br/>users + sync_entities<br/>(Indexed by user_id, hlc)")]
-        CFR2[("Cloudflare R2 Object Store<br/>/audio/{uid}/{sha256}.opus<br/>(25 MB/user Ring Buffer)")]
+        CFP["Cloudflare Pages (Unlimited Free Hosting)<br/>Static SPA + Pre-Generated Question Packs"]
+        CFW["Cloudflare Workers (Hono API — Called ONLY on /account)<br/>- GET /api/auth/google/* (OIDC + PKCE)<br/>- GET /api/cloud/meta (1-Row Timestamp & Stats Check)<br/>- PUT /api/cloud/snapshot (Manual Upload to Cloud)<br/>- GET /api/cloud/snapshot (Manual Pull from Cloud)"]
+        CFD1[("Cloudflare D1 (SQLite)<br/>users + user_cloud_snapshots<br/>(1 Row per User!)")]
+        CFR2[("Cloudflare R2 Object Store<br/>/snapshots/{uid}/latest.ieltsbackup<br/>(Compressed Snapshot Blob)")]
 
         CFW <--> CFD1
         CFW <--> CFR2
@@ -100,9 +100,9 @@ flowchart TB
 
     Google["Google OAuth 2.0 / OIDC<br/>accounts.google.com"]
 
-    CFP -.->|"Initial Static Load"| UI
-    SYNCW <-->|"HTTPS JSON Delta + Opus Blobs"| CFW
-    UI <-->|"OAuth 2.0 PKCE Redirect"| CFW
+    CFP -.->|"Unlimited Static CDN"| UI
+    DBW <-->|"Manual Upload / Pull ONLY on User Click"| CFW
+    UI <-->|"OAuth 2.0 PKCE Login"| CFW
     CFW <-->|"Token Exchange & JWKS"| Google
 ```
 
@@ -406,7 +406,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     MIC["User Microphone<br/>(MediaStream)"] --> WORKLET["AudioWorkletProcessor<br/>(16 kHz Mono Float32 PCM)"]
-    MIC --> REC["MediaRecorder<br/>(audio/webm;codecs=opus @ 24kbps)"]
+    MIC --> REC["MediaRecorder<br/>(Opus WebM @ 24kbps)"]
     REC --> OPFS_AUD[("OPFS: /audio/attempts/{id}.opus")]
 
     WORKLET --> VAD["Silero VAD v5 (30ms windows)<br/>Speech vs. Silence Segments"]
@@ -1000,78 +1000,138 @@ Because this join operation $\sqcup$ is **commutative** ($A \sqcup B = B \sqcup 
 
 ---
 
-## 10. Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)
+## 10. Google OAuth 2.0 & Manual Cloud Snapshot Sync on `/account` Tab (Mermaid)
 
-### 10.1 Sequence Diagram: Google Login (PKCE), Guest Data Claim & HLC Delta Sync
+To guarantee **zero background server load** and stay permanently within Cloudflare's Free Tier even with tens of thousands of users, **there is no automatic background sync**.
+- All study activity (Speaking, Writing, Reading, Listening, Flashcards) runs 100% locally in OPFS with **0 API calls**.
+- Server interaction happens **exclusively inside the `/account` Tab** when the user explicitly logs in with Google and clicks either **"Upload Data to Cloud"** or **"Pull Data from Cloud"**.
+
+### 10.1 Sequence Diagram: Google Login, Side-by-Side Comparison & Double-Confirmed Push/Pull
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant PWA as Browser UI + db.worker.ts
-    participant SyncW as sync.worker.ts
+    participant UI as /account Tab UI
+    participant DBW as db.worker.ts (OPFS SQLite)
     participant CFW as Cloudflare Worker (Hono)
     participant Google as Google OAuth 2.0 (OIDC)
-    participant D1 as Cloudflare D1 (SQLite)
-    participant R2 as Cloudflare R2 (Opus Audio)
+    participant D1 as Cloudflare D1 (1 Row/User)
+    participant R2 as Cloudflare R2 (Snapshot Store)
 
-    Note over User,PWA: User practices offline as Guest (20 sessions in OPFS)
-    User->>PWA: Click "Sign in with Google to Sync"
-    PWA->>PWA: Generate PKCE code_verifier & code_challenge (S256)
-    PWA->>CFW: GET /api/auth/google/login?code_challenge=...
-    CFW-->>Google: 302 Redirect to accounts.google.com/o/oauth2/v2/auth
+    Note over User,DBW: Normal Study Mode: 100% Local in OPFS (0 Server Requests!)
+    User->>UI: Open /account Tab & Click "Sign in with Google"
+    UI->>CFW: GET /api/auth/google/login (PKCE S256 challenge)
+    CFW-->>Google: 302 Redirect to accounts.google.com
     User->>Google: Consent & Authenticate
     Google-->>CFW: GET /api/auth/google/callback?code=...
-    CFW->>Google: POST /token (exchange code + code_verifier)
+    CFW->>Google: POST /token (exchange code + verifier)
     Google-->>CFW: Return signed id_token (JWT)
-    CFW->>CFW: Verify JWT via cached Google JWKS (crypto.subtle)
     CFW->>D1: UPSERT INTO users (id, email, name, picture_url)
-    CFW-->>PWA: Set HttpOnly Secure Session Cookie + Return User Profile
+    CFW-->>UI: Set HttpOnly Session Cookie & Redirect to /account
 
-    Note over PWA,SyncW: Claim Guest Data & Perform First Bidirectional Sync
-    PWA->>PWA: UPDATE study_sessions SET user_id = google_sub WHERE user_id IS NULL
-    PWA->>SyncW: Trigger syncNow()
-    SyncW->>PWA: Read unsynced rows from sync_outbox (batch <= 200)
-    SyncW->>CFW: POST /api/sync/push { changes: [...] }
-    CFW->>D1: Batch INSERT INTO sync_entities ... ON CONFLICT DO UPDATE WHERE excluded.hlc > sync_entities.hlc
-    CFW-->>SyncW: 200 OK { ack_hlc }
-    SyncW->>PWA: Mark sync_outbox rows as synced
+    Note over UI,D1: Fetch Lightweight Cloud Metadata (Only 1 Row Read in D1!)
+    UI->>CFW: GET /api/cloud/meta
+    CFW->>D1: SELECT updated_at, device_name, session_count, attempt_count, srs_count, size_bytes, sha256 FROM user_cloud_snapshots WHERE user_id = ?
+    D1-->>CFW: Return Cloud Snapshot Metadata (or NULL if empty)
+    CFW-->>UI: 200 OK { cloudMeta }
+    UI->>DBW: getLocalSummaryMeta()
+    DBW-->>UI: Return { localMeta: updated_at, session_count, attempt_count, srs_count }
 
-    SyncW->>CFW: GET /api/sync/pull?since_hlc={last_sync_hlc}
-    CFW->>D1: SELECT * FROM sync_entities WHERE user_id = ? AND hlc > ? ORDER BY hlc ASC
-    D1-->>CFW: Return delta rows from other devices
-    CFW-->>SyncW: 200 OK { deltas: [...], server_max_hlc }
-    SyncW->>PWA: Apply LWW-HLC Upsert into local SQLite-WASM & update last_sync_hlc
+    UI->>User: Render Side-by-Side Comparison Card:<br/>[This Device: Updated 4 Nov 14:30 (NEWER)] vs [Cloud: Updated 2 Nov 09:15 (OLDER)]
 
-    opt Optional Audio Recording Sync (Content-Addressed by SHA-256)
-        SyncW->>CFW: PUT /api/audio/{sha256} (audio/webm;codecs=opus)
-        CFW->>D1: Check user audio quota (prune oldest blob if > 25 MB)
-        CFW->>R2: env.AUDIO_BUCKET.put(key, stream)
-        CFW-->>SyncW: 201 Created
+    alt Option A: User Clicks "Upload Data to Cloud (Replace Cloud)"
+        User->>UI: Click [Upload Data to Cloud]
+        UI->>User: Confirmation Step 1: Compare Local vs Cloud Timestamps & Session Counts
+        User->>UI: Click [Continue] -> Confirmation Step 2: "Confirm Overwrite Cloud Data"
+        UI->>DBW: exportCompressedSnapshot() (.ieltsbackup GZIP + SHA-256)
+        DBW-->>UI: Return Snapshot Uint8Array + Metadata
+        UI->>CFW: PUT /api/cloud/snapshot (Body: .ieltsbackup stream)
+        CFW->>R2: PUT /snapshots/{user_id}/latest.ieltsbackup
+        CFW->>D1: INSERT OR REPLACE INTO user_cloud_snapshots (user_id, updated_at, session_count, sha256, size_bytes)
+        CFW-->>UI: 200 OK (Cloud Snapshot Replaced!)
+    else Option B: User Clicks "Pull Data from Cloud (Replace This Device)"
+        User->>UI: Click [Pull Data from Cloud]
+        UI->>User: Confirmation Step 1: Compare Cloud vs Local Timestamps (+ Optional 1-Click Local Backup Download)
+        User->>UI: Click [Continue] -> Confirmation Step 2: "Confirm Replace Local Device Data"
+        UI->>CFW: GET /api/cloud/snapshot
+        CFW->>R2: GET /snapshots/{user_id}/latest.ieltsbackup
+        R2-->>CFW: Stream Snapshot Blob
+        CFW-->>UI: Return .ieltsbackup GZIP + Expected SHA-256
+        UI->>DBW: verifyAndReplaceLocalDatabase(snapshotBytes, expectedSha256)
+        DBW-->>UI: Atomic OPFS SQLite Replace Complete -> Refresh UI!
     end
 ```
 
-### 10.2 Hybrid Logical Clock (HLC) Format
-Every local or remote mutation is stamped with a fixed-width, lexicographically sortable HLC string:
+### 10.2 Double-Confirmation & Timestamp Comparison UX (`/account` Tab)
 
-$$
-\text{HLC} = \underbrace{\texttt{01jbx9k2m0}}_{\text{48-bit physical ms (base36)}} - \underbrace{\texttt{0001}}_{\text{16-bit logical counter (hex)}} - \underbrace{\texttt{a8f39c12}}_{\text{32-bit device ID}}
-$$
+Before any **Upload to Cloud** or **Pull from Cloud** action executes, the user is shown a mandatory **2-Step Comparison & Confirmation Dialog**:
+
+```mermaid
+flowchart TD
+    CLICK["User Clicks [Upload Data to Cloud] or [Pull Data from Cloud]"] --> STEP1["Step 1: Side-by-Side Comparison Modal<br/>-----------------------------------------<br/>THIS DEVICE (Local OPFS) vs CLOUD SNAPSHOT<br/>- Last Updated: 04 Nov 2026, 14:30 WIB vs 02 Nov 2026, 09:15 WIB<br/>- Status Badge: [NEWER BY 2 DAYS] vs [OLDER]<br/>- Study Sessions: 24 Sessions vs 19 Sessions<br/>- Speaking Attempts: 68 Attempts vs 52 Attempts<br/>- FSRS Cards: 140 Cards vs 110 Cards"]
+
+    STEP1 --> WARN_CHECK{"Is Target Being Overwritten<br/>NEWER than Source?"}
+
+    WARN_CHECK -->|"No (Normal: Overwriting Older with Newer)"| STEP2_NORM["Step 2: Standard Double Confirmation<br/>Checkbox: 'I understand this will replace all data in [Cloud / This Device]'<br/>Button: [Confirm Overwrite Now]"]
+
+    WARN_CHECK -->|"Yes (DANGER: Overwriting Newer Data with Older Data!)"| STEP2_DANGER["Step 2: High-Risk Warning Banner (Red)<br/>'Warning: The data you are about to overwrite is NEWER!'<br/>+ 1-Click [Download Backup File (.ieltsbackup) First]<br/>+ Type 'OVERWRITE' to unlock [Confirm Overwrite]"]
+
+    STEP2_NORM --> EXEC["Execute Single Atomic Snapshot Transfer"]
+    STEP2_DANGER --> EXEC
+```
+
+### 10.3 Minimalist Cloudflare D1 Server Schema (`workers/api/migrations/0001_init.sql`)
+
+Because we store a single compressed snapshot per user in R2 rather than syncing thousands of individual rows on every click, the Cloudflare D1 database requires **only 2 ultra-lightweight tables** (1 row per user!):
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,                      -- Google OIDC 'sub' claim
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    picture_url TEXT,
+    created_at INTEGER NOT NULL,
+    last_login_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_cloud_snapshots (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    r2_object_key TEXT NOT NULL,              -- '/snapshots/{user_id}/latest.ieltsbackup'
+    local_updated_at INTEGER NOT NULL,        -- Timestamp of last local study activity inside snapshot
+    uploaded_at INTEGER NOT NULL,             -- Server timestamp when snapshot was uploaded
+    device_label TEXT NOT NULL,               -- e.g., 'Chrome on Windows 11'
+    session_count INTEGER NOT NULL DEFAULT 0,
+    speaking_count INTEGER NOT NULL DEFAULT 0,
+    writing_count INTEGER NOT NULL DEFAULT 0,
+    srs_card_count INTEGER NOT NULL DEFAULT 0,
+    size_bytes INTEGER NOT NULL,
+    sha256_checksum TEXT NOT NULL
+);
+```
 
 ---
 
-## 11. Cloudflare Free-Tier Capacity Math & Cost Guardrails
+## 11. Hosting & Cloudflare Free-Tier Capacity Math (Unlimited Static + Ultra-Low API Usage)
 
-All heavy compute (ASR, pitch DSP, grammar checking, semantic embeddings, and SQLite queries) executes on the **client device**. Cloudflare only verifies Google OAuth tokens and stores tiny compressed JSON deltas.
+### 11.1 Why Cloudflare Pages is the Ultimate Free Hosting Choice
+- **Unlimited Static Requests & Unlimited Bandwidth (USD 0/month)**:
+  Unlike Vercel (100 GB/month limit) or Netlify (100 GB/month limit), **Cloudflare Pages has NO bandwidth cap and NO request cap** on the Free Plan for static assets (HTML, JS, CSS, WASM, and static Question Bank JSON packs).
+- **Same-Origin Pages Functions (Workers) + D1 + R2**:
+  The Hono API runs on the exact same domain (`/api/*`), eliminating CORS preflight (`OPTIONS`) overhead and allowing `HttpOnly; SameSite=Lax` cookies to work natively.
 
-| Cloudflare Service | Free Tier Limit | Usage per Active Logged-In User / Day | Maximum Free DAU Supported |
+### 11.2 Free-Tier Capacity Math with Manual Snapshot Sync
+
+Because users only hit the Worker API when they explicitly open `/account` and click **Upload** or **Pull**:
+
+| Cloudflare Service | Free Tier Limit | Usage per Active User | Max Free Users Supported |
 | :--- | :--- | :--- | :--- |
-| **Cloudflare Pages** | Unlimited static requests & bandwidth | Static SPA + Question Packs | **Unlimited** |
-| **Cloudflare Workers** | $100,000\text{ requests / day}$ | $\approx 6\text{ requests/day}$ ($1\text{ pull} + 3\text{ pushes} + 2\text{ audio puts}$) | **$\approx 16,500\text{ DAU}$** (Guest users consume $0$ requests!) |
-| **Cloudflare D1 Reads** | $5,000,000\text{ rows / day}$ | $\approx 15\text{ rows/day}$ (indexed by `(user_id, hlc)`) | **$\approx 330,000\text{ DAU}$** |
-| **Cloudflare D1 Writes** | $100,000\text{ rows / day}$ | $\approx 10\text{ rows/day}$ ($1\text{ session} + 3\text{ attempts} + 6\text{ SRS cards}$) | **$\approx 10,000\text{ DAU}$** |
-| **Cloudflare D1 Storage** | $5\text{ GB total}$ | $\approx 300\text{ KB}$ per user ($100$ full attempts) | **$\approx 16,000\text{ heavy users}$** |
-| **Cloudflare R2 Storage** | $10\text{ GB / month}$ ($0$ egress fee) | Capped at $25\text{ MB}$ per user via ring-buffer | **$400\text{--}500\text{ full-audio-sync users}$** (Unlimited for transcript/score sync) |
+| **Cloudflare Pages** (Static Web Hosting) | **Unlimited requests & Unlimited bandwidth** | All daily study sessions, UI, WASM, & Question Packs | **Unlimited DAU** |
+| **Cloudflare Workers** (`/api/*`) | $100,000\text{ requests / day}$ | $0\text{ requests}$ during daily study; $\approx 2\text{ requests}$ when manually syncing (`GET /meta` + `PUT/GET /snapshot`) | **$\approx 50,000\text{ manual syncs / day}$** |
+| **Cloudflare D1 Reads** | $5,000,000\text{ rows / day}$ | **Exactly $1\text{ row read}$** per `/account` visit (`SELECT ... WHERE user_id = ?`) | **$5,000,000\text{ checks / day}$** |
+| **Cloudflare D1 Writes** | $100,000\text{ rows / day}$ | **Exactly $1\text{ row write}$** per manual upload | **$100,000\text{ uploads / day}$** |
+| **Cloudflare D1 Storage** | $5\text{ GB total}$ | $\approx 350\text{ bytes}$ per user (1 row in `users` + 1 row in `user_cloud_snapshots`) | **$10,000,000+\text{ users}$** |
+| **Cloudflare R2 Storage** | $10\text{ GB / month}$ ($0$ egress fee) | $\approx 500\text{ KB}$ compressed `.ieltsbackup` snapshot per user (or up to $15\text{ MB}$ with recent audio) | **$20,000\text{ users}$** (at $500\text{ KB}$/snapshot) |
 
 ---
 

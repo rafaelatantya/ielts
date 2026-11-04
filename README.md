@@ -28,6 +28,6 @@ A browser-native, **local-first** IELTS preparation web application covering **S
   - Works 100% offline with zero account required.
 - **Sovereign Progress Export / Import**:
   - Single-click export to `.ieltsbackup` (compact `JSON.gz`) or `.ielts-archive.zip` (SQLite binary + Opus audio recordings) with **CRDT/HLC Smart Merge** or **Snapshot Restore**.
-- **Optional Google Login & Multi-Device Sync (Cloudflare Free Tier — USD 0/month)**:
-  - Direct Google OAuth 2.0 / OIDC (PKCE) verified on Cloudflare Workers.
-  - Conflict-free delta sync via **Hybrid Logical Clocks (HLC)** to **Cloudflare D1** and content-addressed Opus audio sync to **Cloudflare R2**.
+- **Optional Google Login & Manual Cloud Snapshot Sync on `/account` Tab (Cloudflare Free Tier — USD 0/month)**:
+  - **Zero Background Requests**: Studying Speaking, Writing, Reading, Listening, or Flashcards makes **0 server requests** even when logged in.
+  - **Explicit Upload / Pull with Double Confirmation**: Inside the **`/account` Tab**, users log in via Google OAuth 2.0 (PKCE), compare **`This Device (Last Updated)`** vs. **`Cloud Snapshot (Last Updated)`** side-by-side, and explicitly click either **"Upload Data to Cloud"** (replaces cloud data with local device snapshot) or **"Pull Data from Cloud"** (replaces local device data with cloud snapshot) with double confirmation.
