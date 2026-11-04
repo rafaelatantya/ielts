@@ -102,3 +102,28 @@ Works 100% offline without any Google account:
   - **Automatic 7-Day Rollback Safety Bar (`ielts.rollback.sqlite3`)**:
     - Whenever a `Pull from Cloud` or `File Import` overwrites the local database, the previous database is preserved in OPFS at `/db/ielts.rollback.sqlite3`.
     - Displays: *"Previous local database snapshot from `04 Nov 2026, 14:28` is saved in OPFS rollback slot."* + **`[↺ Undo & Restore Previous Local Database]`** button.
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & OPFS / Cloudflare Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `acc-cloud-header` | `<h2>` | `Manual Cloud Snapshot Sync (Google Account)` | `h2` (`Source Serif 4`, `22px`, `600`, `#1C1917`) | Section A title. |
+| `acc-zero-sync-badge` | `<span>` | `Zero Background Sync: Server is only contacted when you click Upload or Pull below.` | `#EAF3EC` bg, `#166534` text, `label-sm` (`12px`) | Guarantees 0 background Cloudflare Worker requests during study. |
+| `acc-google-login-btn` | `<button>` *(When logged out)* | `Sign in with Google to Compare & Sync Snapshots` | `button-secondary` (`#FFFFFF` bg, `1px solid #C7BFA8`, `#1C1917` text) | Initiates OAuth 2.0 PKCE flow (`GET /api/auth/google/login`). |
+| `acc-user-bar` | `<div>` *(When logged in)* | `Signed in as {user.name} ({user.email})` + Buttons: `Refresh Cloud Metadata` & `Sign Out` | `card-warm` (`#F4F0EA` bg, `1px solid #E5DEC9`) | Displays authenticated Google profile and triggers 1-row `GET /api/cloud/meta`. |
+| `acc-local-card` | `<article>` | Title: `This Device (Local OPFS SQLite)` \| Timestamp: `Last Updated: {localUpdatedAt}` \| Status badge: `NEWER BY {diff}` or `OLDER THAN CLOUD` \| Rows: `Study Sessions: {s}`, `Speaking Attempts: {spk}`, `Writing Essays: {wrt}`, `Reading & Listening: {rec}`, `FSRS Cards: {srs}`, `Device: {deviceLabel}` | `card-surface` (`#FFFFFF`, `2px solid #1E3A5F` when newer) | Queries local SQLite counts and `MAX(started_at / created_at)`. |
+| `acc-cloud-card` | `<article>` | Title: `Google Cloud Snapshot (Cloudflare D1 + R2)` \| Timestamp: `Last Updated: {cloudUpdatedAt}` *(or `No Cloud Snapshot Uploaded Yet`)* \| Status badge: `NEWER` or `OLDER` \| Rows: `Study Sessions: {s}`, `Speaking Attempts: {spk}`, `Writing Essays: {wrt}`, `Reading & Listening: {rec}`, `FSRS Cards: {srs}`, `Uploaded From: {deviceLabel}`, `Checksum: sha256:{hashShort}` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Displays metadata returned by `GET /api/cloud/meta`. |
+| `acc-upload-cloud-btn` | `<button>` | `Upload Data to Cloud (Replace Cloud with This Device)` | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Opens `#acc-confirm-modal` in `direction = 'UPLOAD_TO_CLOUD'` mode. |
+| `acc-pull-cloud-btn` | `<button>` | `Pull Data from Cloud (Replace This Device with Cloud)` | `button-secondary` (`#F4F0EA` bg, `#1E3A5F` text, `1px solid #1E3A5F`) | Opens `#acc-confirm-modal` in `direction = 'PULL_FROM_CLOUD'` mode. |
+| `acc-confirm-modal` | `<div role="dialog">` | Step 1 Header: `Compare Timestamps Before Overwriting` \| Step 2 Checkbox: `I confirm that I want to replace all data in {targetName} with the snapshot from {sourceName} (Last updated: {sourceTime}).` \| Danger Lock (if overwriting newer data): Input placeholder `Type OVERWRITE to confirm` + Button `Download .ieltsbackup Safety File First` | Modal (`#FFFFFF` bg, `1px solid #C7BFA8`, danger banner `#FEE2E2`/`#991B1B`) | Enforces mandatory 2-step double confirmation before calling `PUT /api/cloud/snapshot` or `GET /api/cloud/snapshot`. |
+| `acc-export-json-btn` | `<button>` | `Export Compact Progress (.ieltsbackup JSON.gz)` | `button-secondary` (`#F4F0EA` bg, `#1C1917` text) | Generates and downloads canonical `.ieltsbackup` (`JSON.gz` + SHA-256 manifest). |
+| `acc-export-zip-btn` | `<button>` | `Export Full Studio Archive (.ielts-archive.zip with Audio)` | `button-secondary` (`#F4F0EA` bg, `#1C1917` text) | Streams SQLite `.db` + all `/audio/attempts/*.opus` into a downloadable `.zip` via `fflate`. |
+| `acc-import-dropzone` | `<label>` | `Drop .ieltsbackup or .ielts-archive.zip here, or click to select file` \| Mode radios after drop: `Smart Merge (CRDT/HLC — Keep Both)` vs. `Clean Overwrite (Replace This Device)` | `#F4F0EA` bg, `2px dashed #C7BFA8`, `rounded.md` | Verifies SHA-256 manifest checksum before running CRDT merge or Blue-Green atomic DB swap. |
+| `acc-rollback-bar` | `<div>` *(Shown when `ielts.rollback.sqlite3` exists)* | `Rollback Available: Previous local database from {rollbackTime} is preserved on disk.` + Button `Undo & Restore Previous Local Database` | `#FEF3C7` bg, `#92400E` text, `1px solid #92400E` | Atomically swaps `/db/ielts.rollback.sqlite3` back to `/db/ielts.sqlite3`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** add an `"Enable Auto-Sync"` toggle switch—syncing is strictly manual (`Upload Data to Cloud` or `Pull Data from Cloud`) to protect Cloudflare Free Tier quotas and prevent accidental cross-device overwrites.

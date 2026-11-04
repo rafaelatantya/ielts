@@ -50,3 +50,27 @@ Provide an authentic, calm IELTS Speaking test environment covering Part 1, Part
   - Shows: *"Your microphone (`AirPods Pro`) was disconnected at `01:18`. Select another microphone below to resume from `01:18` or finish with the audio recorded so far."*
 - [ ] **Insufficient Speech / Silence Gate Modal (`INSUFFICIENT_SPEECH_DETECTED`)**:
   - If the user clicks Finish but Silero VAD detected $< 2.0\text{ seconds}$ of human voice, prevents Whisper from hallucinating (`"Thank you for watching"`) and prompts: *"We detected less than 2 seconds of speech. Check your selected microphone in the top bar and try recording again."*
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & WebAudio/OPFS Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `sim-part-stepper` | `<nav>` | Steps: `Part 1: Interview` · `Part 2: Cue Card` · `Part 3: Discussion` | `label-sm` (`13px`), active step: `#1E3A5F` bold | Shows current stage in the Speaking exam. |
+| `sim-timer-pill` | `<div>` | Prep Phase: `Prep Time: {mm:ss}` / Speaking Phase: `Speaking: {mm:ss} / {maxMm:ss}` | `mono-metric` (`18px`, `600`, `tabular-nums`), `#92400E` in Prep, `#1C1917` in Speaking (`#9A3412` when $< 15\text{s}$) | Driven by monotonic `deadline_ms - Date.now()` so tab throttling never causes drift. |
+| `sim-mic-switcher` | `<select>` | `🎙️ {activeMicLabel}` | `label-sm` (`12px`), `#FFFFFF` bg, `1px solid #C7BFA8` | Hot-swaps the active `MediaStream` (`deviceId: { exact }`) mid-session without losing already-flushed OPFS audio chunks. |
+| `sim-opfs-flush-pill` | `<span>` | `● Saved to OPFS ({mm:ss})` | `mono-metric` (`12px`), `#166534` text | Updates every `2,000ms` as `mediaRecorder.ondataavailable` writes and `flush()`es `.opus` clusters to `/audio/staging/{attemptId}.opus`. |
+| `sim-examiner-bar` | `<section>` | Label: `Examiner Prompt` \| Buttons: `Replay Question Audio` and `Hide Question Text` *(toggles to `Show Question Text`)* | `card-warm` (`#F4F0EA` bg, `1px solid #E5DEC9`) | Plays the examiner voice prompt and lets the user hide text to test pure listening comprehension. |
+| `sim-cue-card` | `<article>` | Eyebrow: `CANDIDATE TASK CARD — SPEAKING PART {part}` \| Prompt Title: `{prompt.text}` \| Subheader (Part 2): `You should say:` + `{bullets[]}` | `#FFFFFF` bg, `1px solid #C7BFA8`, `padding: 32px`, `Source Serif 4` (`21px` title, `17px` bullets) | Displays the exact curated prompt from the `prompts` table. |
+| `sim-prep-notepad` | `<aside>` *(Part 2 only)* | Header: `1-Minute Preparation Notes` \| Placeholder: `Jot down keywords and C1 collocations for each bullet point...` \| Button (during prep): `Skip Prep & Start Speaking Now ->` | `#FBF9F5` bg, `1px solid #E5DEC9`, `Plus Jakarta Sans` (`14px`) | Saves notes to session state; remains visible alongside the Cue Card during the 2-minute speaking turn. |
+| `sim-waveform-canvas` | `<canvas>` | *(60fps Time-Domain & VAD Waveform)* | `#9A3412` bars on voiced frames, `#C7BFA8` on silence | Renders real-time microphone waveform from `AudioWorklet` / `AnalyserNode`. |
+| `sim-acoustic-hint` | `<p>` | Normal: `Microphone level optimal ({db} dBFS)` / Silent $> 4\text{s}$: `No speech detected — check your selected microphone above.` / Clipping: `Input level is clipping — move slightly back from the microphone.` | `mono-metric` (`12px`, `#57534E` or `#92400E`) | Non-intrusive live acoustic feedback. |
+| `sim-pause-btn` | `<button>` | `Pause / Switch Mic` *(toggles to `Resume Recording`)* | `button-secondary` (`#F4F0EA` bg, `#1C1917` text) | Pauses `MediaRecorder` and monotonic timer so user can adjust hardware. |
+| `sim-rerecord-btn` | `<button>` | `Re-record This Question` | `button-secondary` (`#FFFFFF` bg, `#991B1B` text, `1px solid #E5DEC9`) | Discards current staging buffer after confirmation and restarts current question timer. |
+| `sim-finish-btn` | `<button>` | Next question: `Finish Answer & Next Question ->` / Final question: `Complete & Run Diagnostic Scoring ->` *(or `Complete & Save Recording ->` in 0 MB Lite Mode)* | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Finalizes `/audio/attempts/{attemptId}.opus`, computes SHA-256, and either runs `ai-scorer.worker.ts` (showing the Archival Loupe Scribble animation) or saves as `unscored_audio`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** display live real-time grammar errors or band score numbers *while* the user is still speaking (that distracts the candidate and breaks authentic exam simulation—all diagnostics appear on Screen 05 after clicking Finish).

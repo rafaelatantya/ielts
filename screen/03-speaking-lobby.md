@@ -63,3 +63,32 @@ Serve as the preparation hub before entering a live Speaking simulation. This sc
 - [ ] Lists past Speaking attempts stored in OPFS (`/audio/attempts/*.opus`), showing:
   - Date, Prompt Title, Duration (`01:54`), Audio Playback Mini-Bar, and Status:
   - Either `Scored: Band 7.0` (`[Open Diagnostic Report]`) OR `Unscored Audio (Lite Mode)` with **`[⚡ Run Auto-Scoring Now]`** button.
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & WebAudio/SQLite Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `mic-bar-title` | `<h3>` | `Studio Microphone & Input Check` | `h3` (`Source Serif 4`, `17px`, `600`, `#1C1917`) | Section title on left of Studio Microphone Bar. |
+| `mic-scribble-icon` | `<CondenserMicScribble />` | *(Animated SVG Studio Mic + Cursive Soundwave)* | `48x48px`, stroke `#181512`, bg `#E2D9CA` | Cursive wave loops boil at `9 fps` when input level $> -40\text{ dBFS}$. |
+| `mic-grant-btn` | `<button>` *(Shown when permission not granted)* | `Prompt Browser & Select Microphone` | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Calls `navigator.mediaDevices.getUserMedia({ audio: true })`, then immediately runs `enumerateDevices()` so hardware device labels are unlocked. |
+| `mic-device-select` | `<select id="mic-device-select">` *(Shown once granted)* | Options: `{device.label \|\| 'Microphone ' + idx}` | `body-md` (`14px`), `#FFFFFF` bg, `1px solid #C7BFA8`, `min-width: 280px` | Switches active stream via `getUserMedia({ audio: { deviceId: { exact: value } } })`, stops old tracks, and saves `localStorage.preferred_mic_device_id`. Auto-updates on `navigator.mediaDevices.ondevicechange`. |
+| `mic-refresh-btn` | `<button>` | `Rescan Mics` | `label-sm` (`12px`), `#F4F0EA` bg, `1px solid #E5DEC9` | Manually re-runs `enumerateDevices()` and reconnects the selected microphone. |
+| `mic-vu-canvas` | `<canvas id="mic-vu-meter">` | Label: `Input: {dbValue} dBFS` | `mono-metric` (`12px`), bar colors: `#166534` / `#92400E` / `#991B1B` | `60fps` RMS/Peak meter driven by `AnalyserNode` (`getFloatTimeDomainData`). |
+| `mic-noise-badge` | `<span>` | If noise floor $\le -40\text{ dBFS}$: `Quiet Room ({noiseDb} dBFS)` / Else: `Noisy Environment ({noiseDb} dBFS)` | Quiet: `#EAF3EC`/`#166534`; Noisy: `#FEF3C7`/`#92400E` | Measures 500ms minimum RMS floor to warn users before recording in noisy environments. |
+| `mic-loopback-btn` | `<button>` | Idle: `Test & Hear My Mic (3s)` / Recording: `Speak Now... ({sec}s)` / Playing: `Playing Back Your Voice...` | `button-secondary` (`#F4F0EA` bg, `#1C1917` text, `1px solid #C7BFA8`) | Records a 3-second blob from the selected `deviceId` and immediately plays it back via `<audio>` so the user hears their exact microphone quality. |
+| `spk-gate-ready-pill` | `<div>` *(Shown when Tier 2 status === 'ready')* | `Local Speaking Auto-Scoring Engine Ready Offline (Whisper + Silero VAD + Prosody DSP)` + link `Manage Packs in /features ->` | `#EAF3EC` bg, `#166534` text, `1px solid #166534` | Confirms models are verified in OPFS. |
+| `spk-gate-optin-card` | `<div>` *(Shown when Tier 2 status !== 'ready')* | Heading: `Choose How You Want to Practice Speaking Today` \| Subtext: `AI scoring models are never auto-downloaded without your permission.` | `card-warm` (`#F4F0EA` bg, `1px solid #C7BFA8`) | Prevents surprise bandwidth usage. |
+| `spk-optin-download-btn` | `<button>` | If 0%: `Download Speaking Auto-Scoring Pack (76.2 MB)` / If paused: `Resume Download from {pct}% ({verifiedMb} MB saved on disk)` | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Calls `modelDownloader.start('tier2-speaking-core')` across 4 parallel HTTP Range streams into OPFS. |
+| `spk-optin-lite-btn` | `<button>` | `Practice in 0 MB Lite Mode (Record Audio Now, Score Later on Wi-Fi)` | `button-secondary` (`#FFFFFF` bg, `#1C1917` text, `1px solid #C7BFA8`) | Sets session mode to `lite_unscored` so the user can practice immediately with 0 MB download. |
+| `spk-mode-tabs` | `<div role="tablist">` | 4 Tabs: `Full Mock Exam (Part 1–3)`, `Part 1: Interview`, `Part 2: Cue Card`, `Part 3: Discussion` | Active tab: `#1E3A5F` bg + `#FFFFFF` text | Filters `prompts` query by `part`. |
+| `spk-topic-filters` | `<div>` | Pills: `All Topics`, `Technology`, `Environment`, `Education`, `Work & Economy`, `Culture & Society`, `Unpracticed Only` | Active pill: `#1C1917` bg + `#FFFFFF` text | Filters `prompts` query by `category`. |
+| `spk-prompt-card-{id}` | `<article>` | Badges: `Part {part}` · `{category}` \| Title: `{prompt.title}` \| Collocations label: `Target Collocations: {c1, c2, c3}` \| CTA: `Start Speaking Session ->` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Creates a new row in `study_sessions` and navigates to `/speaking/session/{sessionId}`. |
+| `spk-saved-attempts` | `<table>` | Heading: `Saved Speaking Recordings & Reports` \| Columns: `Date`, `Part & Topic`, `Duration`, `Audio Preview`, `Status / Band`, `Action` | `card-surface` | Lists all rows in `speaking_attempts`. Rows with `band_overall = 0` show button `Run Auto-Scoring Now`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** auto-start `modelDownloader` when `/speaking` mounts.
+- **DO NOT** hide the microphone `<select>` dropdown inside a buried settings modal—it must always be directly accessible at the top of `/speaking`.

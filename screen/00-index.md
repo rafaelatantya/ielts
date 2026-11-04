@@ -50,16 +50,29 @@ flowchart LR
 
 ## 3. Global App Shell Elements (Mandatory Across All Screens)
 
-1. **Left Editorial Sidebar (`248px` on Desktop, Drawer on Mobile)**:
-   - **Masthead**: `Oxford Atelier` in `Source Serif 4` (`20px`, weight `600`, `#1C1917`) + subtitle `LOCAL-FIRST IELTS STUDIO` (`11px` uppercase tracking `0.08em`, `#57534E`).
-   - **Navigation Links**: All 7 main routes (`Dashboard`, `Speaking Lab`, `Writing Lab`, `Reading Room`, `Listening Room`, `FSRS Review`, `AI Models & Features`, `Account & Backup`).
-   - **Footer Status Card**:
-     - Shows `OPFS SQLite: Active (Leader Tab)` or `Follower Tab (Relayed)`.
-     - Shows `Local Last Saved: Just now` in `JetBrains Mono`.
-2. **Top Context Header (`56px` height)**:
-   - **Left**: Current Screen Title in `Source Serif 4` + Breadcrumb trail.
-   - **Right Utility Bar**:
-     - **Target Band Pill**: e.g., `Target: Band 7.5 (Academic)` — clicking opens quick target editor.
-     - **Active Microphone Pill** (visible on Speaking screens): Shows current hardware mic name + live green input dot; clicking opens the `MicStudioBar` popover.
-     - **Incognito / Ephemeral Storage Warning Badge** (only rendered if `navigator.storage.persisted()` is false or quota $< 120\text{ MB}$): Prompts user to export `.ieltsbackup` before closing.
-     - **Focus Mode Button**: Collapses the left sidebar (`200ms` cubic-bezier transition) for distraction-free full-bleed exam simulation.
+### 3.1 Strict UI Anti-Hallucination Contract (Zero Unlisted Elements Rule)
+- **DO NOT** invent additional badges (such as `"✨ AI Powered"`, `"🔥 Hot"`, `"PRO"`, `"Beta"`, `"99% Accurate"`, or `"New!"`).
+- **DO NOT** add top-bar notification bells, global search bars, chat floating action buttons, dark-mode cyberpunk toggles, or fake user profile dropdowns in the top header.
+- **DO NOT** add decorative sub-paragraphs or marketing fluff that is not in the **Exact Verbatim Copy** column of each screen's Element Specification Table.
+- If a data table or list has `0` rows in SQLite, render **only** the exact `Empty State Copy` specified in that screen's file.
+
+### 3.2 Global App Shell Exhaustive Element Table
+
+| Element ID | HTML / Component | Exact Verbatim Copy | Design Tokens | Exact Function & State Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `shell-brand-title` | `<a href="/">` | `Oxford Atelier` | `Source Serif 4`, `20px`, `600`, `#1C1917` | Navigates to `/` (Dashboard). |
+| `shell-brand-sub` | `<span>` | `LOCAL-FIRST IELTS STUDIO` | `Plus Jakarta Sans`, `11px`, `600`, tracking `0.08em`, `#57534E` | Static subtitle directly under brand title. |
+| `nav-item-dashboard` | `<NavLink to="/">` | `Dashboard` | `label-sm` (`13px`), active: `#1E3A5F` bg + `#FFFFFF` text | Routes to `/`. |
+| `nav-item-speaking` | `<NavLink to="/speaking">` | `Speaking Lab` | `label-sm` (`13px`), active: `#1E3A5F` bg + `#FFFFFF` text | Routes to `/speaking`. |
+| `nav-item-writing` | `<NavLink to="/writing">` | `Writing Lab` | `label-sm` (`13px`), active: `#1E3A5F` bg + `#FFFFFF` text | Routes to `/writing`. |
+| `nav-item-reading` | `<NavLink to="/reading">` | `Reading Room` | `label-sm` (`13px`), active: `#1E3A5F` bg + `#FFFFFF` text | Routes to `/reading`. |
+| `nav-item-listening` | `<NavLink to="/listening">` | `Listening Room` | `label-sm` (`13px`), active: `#1E3A5F` bg + `#FFFFFF` text | Routes to `/listening`. |
+| `nav-item-review` | `<NavLink to="/review">` | `FSRS Review` + badge `{dueCount}` | `label-sm` + `mono-metric` pill (`#EAF3EC`/`#166534`) | Routes to `/review`. Badge hidden if `dueCount === 0`. |
+| `nav-item-features` | `<NavLink to="/features">` | `AI Models & Packs` | `label-sm` (`13px`) | Routes to `/features`. Shows small amber dot only if a download is currently paused. |
+| `nav-item-account` | `<NavLink to="/account">` | `Account & Backup` | `label-sm` (`13px`), pinned above footer | Routes to `/account`. |
+| `shell-opfs-status` | `<div id="opfs-footer">` | `OPFS SQLite: Active (Leader)` *(or `Follower Tab`)* | `mono-metric` (`12px`, `#57534E`) | Reflects Web Locks API leader election state from `db.worker.ts`. |
+| `shell-last-saved` | `<span>` | `Saved locally: {HH:mm:ss}` | `mono-metric` (`11px`, `#57534E`) | Updates whenever SQLite commits a write in OPFS. |
+| `topbar-screen-title` | `<h2>` | *{Current Screen Title}* | `Source Serif 4`, `18px`, `600`, `#1C1917` | Displays the canonical title of the active route. |
+| `topbar-target-pill` | `<button>` | `Target: Band {targetBand} ({track})` | `mono-metric` (`12px`), `#F4F0EA` bg, `1px solid #E5DEC9` | Clicking opens a compact popover to update `target_band` (`6.0–9.0`) or `exam_track` (`Academic`/`General`) in `local_meta`. |
+| `topbar-mic-pill` | `<button>` *(Speaking routes only)* | `Mic: {activeMicLabel}` *(or `Select Microphone`)* | `label-sm` (`12px`), `#FFFFFF` bg, `1px solid #C7BFA8` | Clicking scrolls to or opens the `MicStudioBar` dropdown to switch `preferred_mic_device_id`. |
+| `topbar-focus-toggle` | `<button>` | `Focus Mode` *(or `Exit Focus`)* | `label-sm` (`12px`), `#57534E` | Collapses/expands `<aside id="app-sidebar">` (`200ms` transition) during timed practice. |

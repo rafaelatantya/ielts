@@ -51,3 +51,37 @@ Provide an immediate, calm academic overview of the candidate's current estimate
   - Shows `Local OPFS DB Last Updated: 04 Nov 2026, 14:30` (`JetBrains Mono`).
   - Shows `Last Manual Backup (.ieltsbackup): 3 days ago` + **`[1-Click Export .ieltsbackup]`** quick button.
   - Shows `Cloud Snapshot (/account): Not Logged In` (or `Cloud Last Updated: 02 Nov 2026`).
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & SQLite/Worker Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `dash-retro-banner` | `<section>` *(Rendered ONLY if `unscoredCount > 0`)* | `You have {unscoredCount} recorded Speaking response(s) saved in 0 MB Lite Mode.` | `card-warm` (`#F4F0EA` bg, `1px solid #C7BFA8`) | Queries `SELECT COUNT(*) FROM speaking_attempts WHERE band_overall = 0 AND audio_opfs_path IS NOT NULL`. |
+| `dash-retro-btn` | `<button>` | If Tier 2 Ready: `Score {unscoredCount} Saved Recording(s) Now` / If Not Ready: `Manage Speaking AI Pack (76.2 MB) ->` | `button-primary` (`#9A3412`) | Either triggers batch scoring in `ai-scorer.worker.ts` or navigates to `/features`. |
+| `dash-hero-label` | `<span>` | `ESTIMATED OVERALL BAND` | `label-sm` (`12px`, uppercase, `#57534E`) | Static card eyebrow label. |
+| `dash-hero-score` | `<div>` | `{overallBand}` *(or `--` if 0 completed sessions)* | `Source Serif 4`, `56px`, `600`, `#1C1917` | Computed using official IELTS half-band rounding over the latest module scores in `study_sessions`. |
+| `dash-hero-target-badge` | `<span>` | `Target: {targetBand} ({gapText})` | `mono-metric` (`13px`), `#F4F0EA` bg, `#1C1917` text | Reads `target_band` from `local_meta`. |
+| `dash-hero-formula` | `<p>` | If scored: `Official Mean: ({spk} + {wrt} + {rdg} + {lst}) / 4 = {rawMean} -> Band {overallBand}` / If empty: `Complete at least one practice session to calculate your estimated band.` | `mono-metric` (`12px`, `#57534E`) | Shows transparent mathematical calculation. |
+| `dash-skill-speaking` | `<article>` | Title: `Speaking` \| Score: `{spkBand}` \| Sub-pills: `FC {fc} · LR {lr} · GRA {gra} · P {p}` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Displays latest row from `speaking_attempts` + 10-attempt SVG trend line (`#1E4631`). |
+| `dash-skill-writing` | `<article>` | Title: `Writing` \| Score: `{wrtBand}` \| Sub-pills: `TA/TR {ta} · CC {cc} · LR {lr} · GRA {gra}` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Displays latest row from `writing_attempts` + 10-attempt SVG trend line. |
+| `dash-skill-reading` | `<article>` | Title: `Reading` \| Score: `{rdgBand}` \| Sub-pill: `Latest Raw Score: {raw}/40 ({track})` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Displays latest `reading` row from `receptive_attempts`. |
+| `dash-skill-listening` | `<article>` | Title: `Listening` \| Score: `{lstBand}` \| Sub-pill: `Latest Raw Score: {raw}/40` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Displays latest `listening` row from `receptive_attempts`. |
+| `dash-launch-speaking` | `<Link to="/speaking">` | Title: `Speaking Lab` \| Meta: `Part 1, 2 & 3 Simulator · Mic: {activeMicShort}` \| CTA: `Open Speaking Lab ->` | `card-surface`, hover border `#C7BFA8` | Navigates to `/speaking`. |
+| `dash-launch-writing` | `<Link to="/writing">` | Title: `Writing Lab` \| Meta: `Task 1 SVG Charts & Task 2 Split Editor` \| CTA: `Open Writing Lab ->` | `card-surface`, hover border `#C7BFA8` | Navigates to `/writing`. |
+| `dash-launch-reading` | `<Link to="/reading">` | Title: `Reading Room` \| Meta: `3-Passage Annotator & 14 Question Types` \| CTA: `Open Reading Room ->` | `card-surface`, hover border `#C7BFA8` | Navigates to `/reading`. |
+| `dash-launch-listening` | `<Link to="/listening">` | Title: `Listening Room` \| Meta: `4-Section Audio Player & Spelling Normalizer` \| CTA: `Open Listening Room ->` | `card-surface`, hover border `#C7BFA8` | Navigates to `/listening`. |
+| `dash-fsrs-card` | `<aside>` | Eyebrow: `FSRS v5 SPACED REPETITION` \| Heading: `{dueTotal} Cards Due Today` | `card-warm` (`#F4F0EA` bg, `1px solid #E5DEC9`) | Queries `SELECT card_type, COUNT(*) FROM srs_cards WHERE is_deleted = 0 AND due_at <= :now GROUP BY card_type`. |
+| `dash-fsrs-breakdown` | `<ul>` | Rows: `Pronunciation & IPA: {pronCount}`, `Grammar Cloze Fixes: {gramCount}`, `C1/C2 Collocations: {collocCount}` | `mono-metric` (`13px`, `#57534E`) | Exact breakdown of due cards. |
+| `dash-fsrs-cta` | `<Link to="/review">` | If `dueTotal > 0`: `Review {dueTotal} Due Cards ->` / If `0`: `All Caught Up — Browse Deck ->` | `button-forest` (`#1E4631` bg, `#FFFFFF` text) | Navigates to `/review`. |
+| `dash-history-table` | `<table>` | Section Title: `Recent Study Sessions` \| Columns: `Date`, `Module`, `Prompt`, `Band`, `Report` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Queries last 8 rows from `study_sessions ORDER BY started_at DESC LIMIT 8`. |
+| `dash-history-empty` | `<div>` *(When 0 sessions)* | `No study sessions recorded on this device yet. Select a simulator above to begin.` | `body-md` (`#57534E`, centered in table well) | Shown when `study_sessions` is empty. |
+| `dash-storage-card` | `<aside>` | Section Title: `Local Data & Backup Status` \| Rows: `OPFS Database: {dbSizeMb} MB`, `Last Local Activity: {lastUpdatedStr}`, `Last File Export: {lastExportStr}` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Reads storage stats & `local_meta.last_export_at`. |
+| `dash-quick-export-btn` | `<button>` | `Export .ieltsbackup Now` | `button-secondary` (`#F4F0EA` bg, `#1C1917` text) | Triggers immediate download of `.ieltsbackup` (`JSON.gz`) from `db.worker.ts`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** invent fake streak fire emojis (`🔥 7 Day Streak!`), XP points, leaderboards, or gamified avatars.
+- **DO NOT** display fake sample scores (`Band 7.5`) when the user's SQLite database has `0` completed attempts—always show `--` until real attempts exist.

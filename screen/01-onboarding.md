@@ -59,3 +59,35 @@ Welcome the user without requiring registration or downloading any AI models upf
 ## 3. Micro-Interactions & Edge Cases
 - **Transition**: Step cards fade in with a subtle `8px` upward slide (`200ms cubic-bezier(0.22, 1, 0.36, 1)`).
 - **Incognito Detection**: If `storage.estimate().quota < 150 MB`, display a warm amber notice (`#FEF3C7` bg, `#92400E` text): *"You appear to be in a Private/Incognito window. Local data will be cleared when you close all tabs—remember to Export Backup before exiting."*
+
+---
+
+## 4. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & SQLite/API Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `onb-scribble-hero` | `<GooseneckLampScribble />` | *(Animated SVG — no text inside SVG)* | `viewBox="0 0 1000 640"`, height `190px`, bg `#E2D9CA`, stroke `#181512`, beam `#FAF7F1` | Plays the 3-phase Claude-style Gooseneck Desk Lamp animation (`600ms` `stroke-dashoffset` draw-in + `#FAF7F1` light cone sweeping across the manuscript to reveal 3 rows of cursive scribbles). |
+| `onb-title` | `<h1>` | `Your Private, Local-First IELTS Study Studio.` | `h1` (`Source Serif 4`, `32px`, `600`, `#1C1917`) | Static main heading. |
+| `onb-subtitle` | `<p>` | `All speaking recordings, essays, and band diagnostics are processed and stored directly on your device using WebAssembly and SQLite. Zero mandatory account, zero background data drain.` | `body-md` (`Plus Jakarta Sans`, `15px`, `#57534E`) | Static explanatory lead paragraph. |
+| `onb-pill-1` | `<span>` | `100% Offline SQLite OPFS` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 1. |
+| `onb-pill-2` | `<span>` | `Zero Auto-Download Quota Drain` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 2. |
+| `onb-pill-3` | `<span>` | `Sovereign .ieltsbackup Export` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 3. |
+| `onb-section-1-label` | `<h2>` | `1. Exam Track & Target Band` | `h3` (`Source Serif 4`, `18px`, `600`, `#1C1917`) | Section 1 subheader. |
+| `onb-track-academic` | `<button role="radio">` | `IELTS Academic` + subtext `University & Professional Registration (Charts/Graphs Task 1)` | Active: `#FFFFFF` bg, `2px solid #1E3A5F`; Inactive: `#F4F0EA` bg, `1px solid #E5DEC9` | Sets `exam_track = 'academic'` (Default selected). |
+| `onb-track-general` | `<button role="radio">` | `IELTS General Training` + subtext `Migration & Work Experience (Formal/Informal Letter Task 1)` | Active: `#FFFFFF` bg, `2px solid #1E3A5F`; Inactive: `#F4F0EA` bg, `1px solid #E5DEC9` | Sets `exam_track = 'general'`. |
+| `onb-band-picker` | `<div role="radiogroup">` | Buttons: `6.0`, `6.5`, `7.0`, `7.5`, `8.0`, `8.5`, `9.0` | `mono-metric` (`15px`, `600`), selected: `#1E3A5F` bg + `#FFFFFF` text | Sets `target_band` (Default: `7.5`). |
+| `onb-band-desc` | `<p>` | Dynamic lookup (`6.0 Competent User` .. `9.0 Expert User`) | `Source Serif 4` italic (`14px`, `#57534E`) | Updates immediately when a band button is clicked. |
+| `onb-exam-date` | `<input type="date">` | Label: `Target Exam Date (Optional)` | `mono-metric` (`14px`), `#FFFFFF` bg, `1px solid #C7BFA8` | Saves ISO date string to `local_meta.exam_date`. |
+| `onb-section-2-label` | `<h2>` | `2. Local Storage & Microphone Check` | `h3` (`Source Serif 4`, `18px`, `600`, `#1C1917`) | Section 2 subheader. |
+| `onb-storage-status` | `<div>` | `Local Disk Quota: {freeGb} GB available` | `mono-metric` (`13px`, `#1C1917`) | Populated on mount from `navigator.storage.estimate()`. |
+| `onb-storage-btn` | `<button>` | Unverified: `Lock Persistent Storage` / Verified: `Persistent Storage Locked ✓` | Unverified: `button-secondary`; Verified: `#EAF3EC` bg + `#166534` text | Calls `navigator.storage.persist()` so the browser never evicts OPFS SQLite or AI models. |
+| `onb-mic-btn` | `<button>` | Default: `Prompt Browser & Select Microphone` / Selected: `Active Mic: {deviceLabel}` | `button-secondary` (`#F4F0EA` bg, `#1C1917` text, `1px solid #C7BFA8`) | Calls `navigator.mediaDevices.getUserMedia({ audio: true })`, reveals `<select id="onb-mic-select">` + live dBFS bar, and saves `preferred_mic_device_id`. |
+| `onb-restore-btn` | `<button>` | `Already have a .ieltsbackup file? Import Progress` | `label-sm` (`13px`, `#1E3A5F` underline) | Opens hidden `<input type="file" accept=".ieltsbackup,.zip">` to restore a backup immediately. |
+| `onb-skip-btn` | `<button>` | `Skip (Use Defaults: Academic, Band 7.5)` | `label-sm` (`13px`, `#57534E`) | Writes default metadata (`academic`, `7.5`, `onboarding_completed = '1'`) to SQLite and navigates to `/`. |
+| `onb-submit-btn` | `<button>` | `Enter Study Studio ->` | `button-primary` (`#9A3412` Terracotta bg, `#FFFFFF` text) | Writes selected `exam_track`, `target_band`, `exam_date`, and `onboarding_completed = '1'` to `local_meta` in SQLite and navigates to `/`. |
+
+---
+
+## 5. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** add email/password signup inputs or mandatory Google Login buttons on the Onboarding screen (login lives strictly on `/account`).
+- **DO NOT** trigger any AI model downloads during Onboarding (`0 MB` network rule).

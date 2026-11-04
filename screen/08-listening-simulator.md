@@ -38,3 +38,22 @@ Simulate the 4-section IELTS Listening exam (`Section 1: Everyday Dialogue`, `Se
 - [ ] **Interactive Time-Synced Listening Transcript (Review Mode Only)**:
   - Displays the full dialogue/lecture transcript in `Source Serif 4`.
   - Clicking any sentence jumps the Opus audio player to that exact timestamp, and highlights the exact phrase where `Answer Q17` was spoken (including **Distractor Warnings** explaining how the speaker first said *"Tuesday"* and then corrected themselves to *"Thursday"*!).
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & SQLite/Audio Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `lst-section-tabs` | `<div role="tablist">` | Tabs: `Section 1 (Q1–10)`, `Section 2 (Q11–20)`, `Section 3 (Q21–30)`, `Section 4 (Q31–40)` | Active: `#1E3A5F` bg + `#FFFFFF` text | Switches between the 4 Listening sections. |
+| `lst-audio-deck` | `<section>` | Status: `Pre-Section Reading Time: {sec}s` or `Playing Section {n}: {mm:ss} / {total}` \| Mode toggle: `Strict Exam Audio (No Rewind)` vs. `Practice Mode (Scrubbing Enabled)` | `card-warm` (`#F4F0EA` bg, `1px solid #E5DEC9`), `mono-metric` | Plays offline Opus track and enforces official non-scrubbable playback when in Strict Exam Mode. |
+| `lst-wordlimit-banner` | `<div>` | `Complete the notes below. Write {wordLimitRule} for each answer.` | `#FEF3C7` bg, `#92400E` text, `label-sm` (`13px`) | Parses word/number count live; shows inline warning `Exceeds {max} word limit` if violated. |
+| `lst-question-sheet` | `<article>` | Structured Note/Form/Table/Multiple-Choice/Map inputs `Q1` .. `Q40` | `card-surface` (`#FFFFFF` bg, `max-width: 920px`) | Stores user responses in state and auto-saves to `receptive_attempts`. |
+| `lst-submit-btn` | `<button>` | `Submit Listening Answers ->` | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Runs deterministic UK/US/Number/Date Answer Normalizer and reveals Review Mode. |
+| `lst-normalizer-badge` | `<span>` *(Review Mode)* | Correct: `✓ Correct (Accepted: {canonicalVariants})` / Incorrect: `✗ Your Answer: "{userAns}" · Correct: "{correctAns}"` | Correct: `#EAF3EC`/`#166534`; Incorrect: `#FEE2E2`/`#991B1B` | Explains spelling/number normalization or flags misspelling with `[+ Add Spelling to FSRS]`. |
+| `lst-transcript-panel` | `<section>` *(Review Mode)* | Section Title: `Time-Synced Audio Transcript & Distractor Notes` \| Clickable dialogue turns `[{mm:ss}] Speaker: ...` | `card-surface`, `Source Serif 4` (`17px`) | Clicking any line seeks audio to `turn.start_sec`; highlights distractor traps in `#FEF3C7`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** reveal the listening transcript while a test is in progress—the transcript panel is strictly locked until after `Submit Listening Answers ->` is clicked.

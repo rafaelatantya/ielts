@@ -74,3 +74,31 @@ Deliver the most detailed, transparent IELTS Speaking evaluation possible—comb
   - Plots speaker-normalized pitch $f_{\text{ST}}(t)$ in semitones over time alongside the target expressive band ($\pm 2.5\text{ to }4.5\text{ ST}$), visually highlighting flat/monotone segments.
 - [ ] **Rolling 15-Second Speech Rate ($\text{WPM}$) & Rhythm ($\text{nPVI}$) Chart**:
   - Shows where the candidate spoke smoothly ($130\text{--}160\text{ WPM}$) vs. where speed dropped due to lexical searching.
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & Data Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `rep-title` | `<h1>` | `Speaking Diagnostic Report` | `h1` (`Source Serif 4`, `28px`, `600`, `#1C1917`) | Main report header. |
+| `rep-meta-sub` | `<p>` | `Part {part}: {prompt.title} · Recorded {formattedDate} · Duration {mm:ss}` | `mono-metric` (`13px`, `#57534E`) | Reads metadata from `speaking_attempts`. |
+| `rep-add-fsrs-btn` | `<button>` | `Add {mistakeCount} Detected Mistakes to FSRS Deck` *(or `Added to FSRS Deck ✓`)* | `button-forest` (`#1E4631` bg, `#FFFFFF` text) | Inserts mispronounced words, ERRANT grammar fixes, and missed target collocations into `srs_cards`. |
+| `rep-overall-card` | `<article>` | Eyebrow: `OVERALL SPEAKING BAND` \| Score: `{band_overall}` \| Sub: `95% Calibrator CI: ± 0.25` \| Formula: `({fc} + {lr} + {gra} + {p}) / 4 = {rawMean} -> {band_overall}` | `card-surface` (`#FFFFFF`), score in `Source Serif 4` (`52px`) | Displays calibrated overall band from `speaking_attempts`. |
+| `rep-card-fc` | `<article>` | Title: `Fluency & Coherence` \| Band: `{band_fc}` \| Metrics: `Speech Rate: {wpm} WPM · Mean Run (MLR): {mlr} words · Mid-Clause Pauses: {midPauses} · Topic Relevance: {topicPct}%` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `acoustic_metrics_json` & `semantic_metrics_json`. |
+| `rep-card-lr` | `<article>` | Title: `Lexical Resource` \| Band: `{band_lr}` \| Metrics: `Diversity (MTLD): {mtld} · C1/C2 Words: {c1Count} · Idioms/Collocations: {collocCount} · Paraphrase: {paraScore}%` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `lexical_metrics_json`. |
+| `rep-card-gra` | `<article>` | Title: `Grammatical Range & Accuracy` \| Band: `{band_gra}` \| Metrics: `Error-Free Clauses (EFC): {efcPct}% ({clean}/{total}) · Subordination (SCR): {scr} · Complex Families: {famCount}/10` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `grammar_metrics_json`. |
+| `rep-card-p` | `<article>` | Title: `Pronunciation` \| Band: `{band_p}` \| Metrics: `Phoneme GOP: {gopPct}% · Pitch Variation: {f0Std} ST · Rhythm (nPVI): {npvi} · L1 Alerts: {l1Count}` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `acoustic_metrics_json` & `word_timestamps_json`. |
+| `rep-audio-bar` | `<div>` | Controls: `[Play / Pause]`, `{currentTime} / {duration}`, Speed pills `0.75x` / `1.0x` / `1.25x` | `card-warm` (`#F4F0EA` bg), `mono-metric` | Streams `/audio/attempts/{attemptId}.opus` from OPFS. |
+| `rep-transcript-filters` | `<div>` | Filter toggles: `All Annotations`, `Mid-Clause Pauses ({n})`, `Fillers & Repeats ({n})`, `Pronunciation Alerts ({n})`, `C1/C2 & Collocations ({n})` | `label-sm` (`12px`) pills | Toggles highlight classes in `#rep-transcript-well`. |
+| `rep-transcript-well` | `<div>` | Interactive word buttons `{w_i}` + inline pause chips: `[⏸ {sec}s Mid-Clause]` (`#FEF3C7`/`#92400E`), `[⏸ {sec}s Freeze]` (`#FEE2E2`/`#991B1B`), `[Filler: {w}]` (`#F4F0EA`) | `Source Serif 4` (`18px`, `line-height: 2.05`), `#FFFFFF` bg | Clicking any word `w_i` seeks audio to `w_i.start` and plays until `w_i.end`. |
+| `rep-phoneme-popover` | `<div role="dialog">` | Header: `"{word}" — Expected: /{ipa_expected}/ · Spoken: /{ipa_actual}/` \| Phoneme GOP bars \| Diagnostic tip \| Buttons: `Hear My Voice ({start}s)` & `Hear Native Pronunciation` | `#FFFFFF` bg, `1px solid #C7BFA8`, `rounded.md` | Opens when clicking any word with `gop < 75` or L1 Indonesian transfer flag (`/θ/->/t/`, `/ð/->/d/`, `/v/->/f/`, missing `-ed`/`-s`). |
+| `rep-gec-table` | `<table>` | Section Title: `Grammatical Range & ERRANT Error Analysis` \| Columns: `#`, `Your Spoken Clause`, `Minimal Grammatical Fix (ERRANT Code)`, `Band 8.5 Structural Upgrade` | `card-surface`, red diff `#FEE2E2`/`#991B1B`, green diff `#EAF3EC`/`#166534` | Renders clause-level diffs from `grammar_metrics_json.errors`. |
+| `rep-coverage-card` | `<section>` | Section Title: `Prompt Coverage & Band 8.5 Model Comparison` \| Checklist of Cue Card bullets with `Covered ({pct}%)` or `Omitted` badge + expandable `Band 8.5 Model Answer` | `card-surface` | Binds to `semantic_metrics_json.bullet_scores` & `prompt.model_answer_band85`. |
+| `rep-prosody-charts` | `<section>` | Left Chart: `Pitch Intonation Contour (Semitones Relative to Speaker Median)` \| Right Chart: `Rolling Speech Rate (WPM) & Stress-Timed Rhythm (nPVI)` | `card-surface`, SVG charts with `#1E3A5F` & `#9A3412` strokes | Renders time-series arrays from `acoustic_metrics_json`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** invent generic AI praise paragraphs without citing specific words, timestamps, or clauses from the user's transcript.
+- **DO NOT** use radar spider charts with unlabeled axes—always show the exact numeric metric (`WPM`, `MTLD`, `EFC%`, `ST`, `nPVI`) next to every score.

@@ -51,3 +51,24 @@ Replicate the computer-delivered IELTS Reading test (3 Passages, 40 Questions, 6
 - [ ] **1-Click `[🔍 Jump to Evidence in Passage]` Button on Every Question**:
   - Clicking smoothly scrolls the Left Passage Pane to the exact `data-evidence-span="q14"`, flashes a warm terracotta border around the sentence, and displays the pre-generated explanation (especially clarifying *why* an answer is **`FALSE`** [contradicts passage] vs. **`NOT GIVEN`** [no information provided]).
 - [ ] **1-Click `[+ Save Unknown Passage Vocabulary to FSRS Deck]`**: Double-clicking any academic word in the passage opens its CEFR definition + IPA and lets the user add it to `srs_cards`.
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & SQLite Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `rdg-passage-tabs` | `<div role="tablist">` | Tabs: `Passage 1 (Q1–13)`, `Passage 2 (Q14–26)`, `Passage 3 (Q27–40)` | Active: `#1E3A5F` bg + `#FFFFFF` text | Switches active reading passage and question range. |
+| `rdg-font-controls` | `<div>` | Buttons: `A-`, `A`, `A+` | `label-sm` (`12px`), `#F4F0EA` bg, `1px solid #E5DEC9` | Adjusts passage font size (`16px` / `17.5px` / `19px`). |
+| `rdg-timer-pill` | `<div>` | `Time Remaining: {mm:ss}` | `mono-metric` (`16px`, `600`, `tabular-nums`) | Monotonic 60-minute wall-clock countdown. |
+| `rdg-submit-btn` | `<button>` | `Submit Reading Test ->` | `button-primary` (`#9A3412` bg, `#FFFFFF` text) | Grades all 40 questions deterministically, saves to `receptive_attempts`, and switches to Evidence Review Mode. |
+| `rdg-passage-article` | `<article>` | Title: `{passage.title}` \| Paragraphs labeled `A`, `B`, `C`... in margin | Left split pane (`#FBF9F5` bg), `Source Serif 4` (`17.5px`, `line-height: 1.78`, `max-width: 66ch`) | Renders reading passage with `data-evidence-span="q{N}"` anchors. |
+| `rdg-highlight-toolbar` | `<div role="toolbar">` *(On text selection)* | Buttons: `Amber`, `Sage`, `Rose`, `Add Note`, `Clear` | Floating pill (`#FFFFFF` bg, `1px solid #C7BFA8`) | Wraps selected DOM range and persists offsets to `highlights_json`. |
+| `rdg-question-pane` | `<section>` | Group instruction banner (e.g., `Questions 1–6: Do the following statements agree with the information given in Reading Passage 1?` + `TRUE / FALSE / NOT GIVEN` rules) | Right split pane (`#FFFFFF` bg), `Plus Jakarta Sans` (`15px`) | Renders all 14 official question types with strict word-limit validators on completion inputs. |
+| `rdg-bottom-palette` | `<nav>` | 40 buttons: `1` .. `40` + `[Flag Q{active}]` | Fixed bottom bar (`52px`), `mono-metric` (`12px`) | Jumps directly to Question `N` and shows answered/unanswered/flagged status. |
+| `rdg-evidence-jump-btn` | `<button>` *(Review Mode only)* | `Jump to Passage Evidence (Paragraph {para}) ->` | `label-sm` (`12px`, `#1E3A5F` bg/border) | Smooth-scrolls `#rdg-passage-article` to `data-evidence-span="q{N}"` and reveals the pre-generated rationale. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** show the `Jump to Passage Evidence` buttons or correct/incorrect colors *before* the user clicks `Submit Reading Test ->`.

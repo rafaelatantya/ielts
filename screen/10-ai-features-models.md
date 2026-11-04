@@ -58,3 +58,25 @@ Each card uses the `ModelPackCard` specification from `DESIGN.md`:
 #### Card 4: Offline AI Examiner Voice Pack (`Kokoro-82M / Opus Pack` — `80.0 MB` Optional)
 - [ ] **Unlocked Features**: Natural British, Australian, and North American offline neural TTS voices for Speaking Parts 1–3 and additional Listening drills (falls back to built-in Web Speech synthesis / pre-packaged compressed clips if not downloaded).
 - [ ] **20-Chunk Visual Matrix** + `[Download / Pause / Resume / Delete]` controls.
+
+---
+
+## 3. Exhaustive Element Specification Table (Exact Copy & Function Lock)
+
+| Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & `model-downloader.worker.ts` Binding |
+| :--- | :--- | :--- | :--- | :--- |
+| `feat-quota-banner` | `<section>` | Badge: `Strict Zero Auto-Download Policy Active` \| Text: `AI models are never downloaded automatically. When you click Download below, files are fetched across 4 parallel HTTP Range streams in 4 MiB SHA-256 chunks directly into OPFS disk—if you close the browser or your device powers off, you can resume from the exact last verified chunk.` | `#EAF3EC` bg, `#166534` text, `1px solid #166534` | Static guarantee banner at top of `/features`. |
+| `feat-storage-meter` | `<section>` | Heading: `Local Browser OPFS Disk Allocation` \| Legend: `SQLite DB: {dbMb} MB · Voice Recordings: {audMb} MB · AI Models: {modMb} MB · Free Quota: {freeGb} GB` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`), `mono-metric` | Reads live storage breakdown from `navigator.storage.estimate()` and OPFS directory scan. |
+| `feat-cdn-select` | `<select>` | Label: `CDN Mirror Priority:` \| Options: `Auto Multi-Mirror (HuggingFace LFS + Cloudflare Edge)`, `Cloudflare R2 Edge Cache (SEA/Jakarta PoP)`, `HuggingFace Hub Global CDN` | `label-sm` (`13px`), `#FFFFFF` bg, `1px solid #C7BFA8` | Configures mirror waterfall order in `model-downloader.worker.ts`. |
+| `feat-streams-select` | `<select>` | Label: `Multi-Point Streams:` \| Options: `4 Parallel Streams (Recommended)`, `6 Parallel Streams (Fast Wi-Fi)`, `1 Stream (Cellular / Data Saver)` | `label-sm` (`13px`), `#FFFFFF` bg, `1px solid #C7BFA8` | Sets concurrent HTTP `Range` worker pool size $P \in \lbrace 1, 4, 6 \rbrace$. |
+| `feat-pack-tier1` | `<article>` | Title: `Tier 1 — Fast Writing & Lexical/Grammar Pack` \| Size badge: `6.1 MB (2 Chunks)` \| Description: `Unlocks harper.js WASM grammar checker, 15,000-word CEFR/AWL lexicon, 6,500-collocation trie, and QWK Band Calibrator.` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `model_registry` row `tier1-fast-nlp`. |
+| `feat-pack-tier2` | `<article>` | Title: `Tier 2 — Speaking Core Auto-Scoring Pack` \| Size badge: `76.2 MB (19 Chunks × 4 MiB)` \| Description: `Unlocks verbatim Whisper-base.en ASR, word timestamps, Silero VAD v5 pause classifier, and Rust pYIN Pitch/nPVI Prosody DSP.` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `model_registry` row `tier2-speaking-core`. |
+| `feat-pack-tier3` | `<article>` | Title: `Tier 3 — Deep Phoneme IPA GOP & Advanced GEC Pack` \| Size badge: `116.0 MB (29 Chunks × 4 MiB)` \| Description: `Unlocks Wav2Vec2-CTC + SpeechOcean762 GOPT phoneme aligner, Indonesian L1 transfer detector, Flan-T5-GEC / DeBERTa-GED grammar rewriter, and Cue Card bullet entailment.` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `model_registry` row `tier3-deep-specialist`. |
+| `feat-pack-tts` | `<article>` | Title: `Optional — Offline Neural Examiner Voice Pack` \| Size badge: `80.0 MB (20 Chunks × 4 MiB)` \| Description: `Unlocks British, Australian, and US neural examiner voices for offline Speaking Parts 1–3.` | `card-surface` (`#FFFFFF`, `1px solid #E5DEC9`) | Binds to `model_registry` row `tier4-examiner-tts`. |
+| `feat-chunk-grid-{id}` | `<div>` | Grid of $N$ squares (`Chunk 0` .. `Chunk N-1`) + Telemetry text: `{verifiedCount} / {totalChunks} Chunks Verified ({verifiedMb} MB / {totalMb} MB) · {speedMb} MB/s · ETA {mm:ss}` | `mono-metric` (`12px`), squares: `#E5DEC9` pending, `#92400E` active, `#166534` verified | Queries `model_download_chunks` in SQLite; updates live as each $4\text{ MiB}$ chunk passes SHA-256 and `flush()`es to OPFS. |
+| `feat-pack-actions-{id}` | `<div>` | State buttons: `Download Pack ({sizeMb} MB)` / `Pause Download` / `Resume from {pct}%` / `Verify SHA-256 Integrity` / `Delete from Disk` | Primary: `#9A3412`; Pause: `#F4F0EA`; Delete: `#FEE2E2`/`#991B1B` | Dispatches `start`, `pause`, `resume`, `verify`, or `delete` RPC to `model-downloader.worker.ts`. |
+
+---
+
+## 4. Forbidden Elements (`DO NOT ADD`)
+- **DO NOT** include any generative LLM download card (`Qwen`, `Llama`, `Mistral`)—all questions and model answers come from the pre-generated Question Bank.
