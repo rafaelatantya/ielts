@@ -20,9 +20,10 @@
 8. [Local-First Storage Architecture & ER Schema (Mermaid + SQL)](#8-local-first-storage-architecture--er-schema-mermaid--sql)
 9. [Deterministic Export & Import System (Backup / Restore / CRDT Merge)](#9-deterministic-export--import-system-backup--restore--crdt-merge)
 10. [Google OAuth 2.0 & Manual Cloud Snapshot Sync on `/account` Tab (Mermaid)](#10-google-oauth-20--manual-cloud-snapshot-sync-on-account-tab-mermaid)
-11. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#11-cloudflare-free-tier-capacity-math--cost-guardrails)
+11. [Hosting & Cloudflare Free-Tier Capacity Math (Unlimited Static + Ultra-Low API Usage)](#11-hosting--cloudflare-free-tier-capacity-math-unlimited-static--ultra-low-api-usage)
 12. [Security, Privacy & Cross-Origin Isolation](#12-security-privacy--cross-origin-isolation)
-13. [Monorepo Structure & Phased Implementation Roadmap](#13-monorepo-structure--phased-implementation-roadmap)
+13. [Production Error Handling, Edge-Case Resilience & Bug Prevention Matrix](#13-production-error-handling-edge-case-resilience--bug-prevention-matrix)
+14. [UI Information Architecture, Screen Blueprint & Phased Implementation Roadmap](#14-ui-information-architecture-screen-blueprint--phased-implementation-roadmap)
 
 ---
 
@@ -1151,9 +1152,73 @@ To enable multi-threaded WebAssembly (`SharedArrayBuffer` for ONNX Runtime Web) 
 
 ---
 
-## 13. Monorepo Structure & Phased Implementation Roadmap
+## 13. Production Error Handling, Edge-Case Resilience & Bug Prevention Matrix
 
-### 13.1 Repository Layout (Mermaid)
+Local-first browser applications using WebAssembly, OPFS, WebAudio, and ONNX face specific runtime hazards that ordinary CRUD apps never encounter. Every critical edge case is handled deterministically below:
+
+### 13.1 End-to-End Fault Tolerance & Auto-Recovery Architecture (Mermaid)
+
+```mermaid
+flowchart TB
+    subgraph Edge1["1. Multi-Tab OPFS Lock Contention"]
+        TAB["User Opens App in 2+ Browser Tabs"] --> LOCK["Web Locks API: navigator.locks.request('ielts_opfs_leader')"]
+        LOCK -->|"Acquired Lock"| LEADER["Leader Tab Opens OPFS FileSystemSyncAccessHandle"]
+        LOCK -->|"Waiting Lock"| FOLLOWER["Follower Tab Proxies SQL Queries via BroadcastChannel"]
+    end
+
+    subgraph Edge2["2. Mid-Test Mic Disconnect or Tab Crash"]
+        REC["Speaking Recording Active"] --> SLICE["MediaRecorder(2000ms timeslice)<br/>Flushes .opus chunks to OPFS every 2s"]
+        REC --> MIC_ERR["Mic Unplugged (onended / ondevicechange)"]
+        MIC_ERR --> PAUSE["Auto-Pause Exam Timer + Show Mic Switch Modal<br/>Resume from exact 2s checkpoint!"]
+    end
+
+    subgraph Edge3["3. Whisper Silence Hallucination & Noise"]
+        AUD["Recorded Audio Buffer"] --> VAD_CHK{"Silero VAD Voiced Time<br/>T_speech >= 2.0s ?"}
+        VAD_CHK -->|"No (Silence / Static)"| ABORT["Reject Scoring: Return INSUFFICIENT_SPEECH_DETECTED<br/>(Prevents Whisper 'Thank you for watching' hallucination!)"]
+        VAD_CHK -->|"Yes"| STRIP["Strip Non-Speech Noise Margins Before Whisper ASR"]
+    end
+
+    subgraph Edge4["4. Blue-Green Atomic DB Swap (Import / Cloud Pull)"]
+        IMP["Incoming Snapshot (.ieltsbackup)"] --> STAGE["Write to /db/ielts.incoming.sqlite3<br/>Run SHA-256 + PRAGMA integrity_check"]
+        STAGE -->|"Valid"| SWAP["Rename Current DB -> /db/ielts.rollback.sqlite3<br/>Promote incoming -> /db/ielts.sqlite3"]
+        STAGE -->|"Corrupt / Network Drop"| ROLL["Delete incoming file — Existing DB 100% Untouched!"]
+    end
+```
+
+### 13.2 Complete Edge-Case & Bug Prevention Matrix
+
+| # | Failure Mode / Edge Case | Root Cause in Browser / WASM | Deterministic Mitigation & Recovery Protocol |
+| :--- | :--- | :--- | :--- |
+| **1** | **Multi-Tab OPFS Crash (`NoModificationAllowedError`)** | `FileSystemSyncAccessHandle` places an exclusive OS file lock on `/db/ielts.sqlite3`. Opening a second tab crashes the second worker. | **Web Locks + `BroadcastChannel` Leader Election**: Only 1 Leader Tab holds the OPFS handle. Follower tabs transparently route SQLite RPC over `BroadcastChannel`. If the Leader Tab closes, the next tab promotes itself in $< 20\text{ ms}$. |
+| **2** | **Mic Unplugged or Browser Crash During 2-Min Speaking Part 2** | Bluetooth headset dies or accidental tab refresh at `01:45` wipes in-memory `MediaRecorder` blobs. | **2-Second OPFS Timeslice Flushing**: `mediaRecorder.start(2000)` appends and `flush()`es `.opus` chunks to `/audio/staging/active.opus` every $2\text{ s}$. On mic disconnect, the timer auto-pauses and allows hot-swapping mics; on tab crash, next boot offers **[Recover Interrupted Attempt]**. |
+| **3** | **Whisper Silence Hallucinations (`"Thank you for watching"`)** | Feeding pure silence or cafe background noise into Whisper causes decoder hallucinations that would get graded as an answer. | **Silero VAD Gate + SNR Pre-Check**: If voiced duration $T_{\text{speech}} < 2.0\text{ s}$ or recognized words $N < 5$, scoring is aborted with `INSUFFICIENT_SPEECH_DETECTED` and prompts a free re-take without saving a fake score. |
+| **4** | **Out-of-Memory (`OOM`) / WebGPU Context Loss on 4GB RAM Devices** | Loading all 5 ONNX models simultaneously into RAM can exceed mobile browser per-tab memory limits ($\approx 1.2\text{ GB}$). | **Sequential Model Eviction Mode**: On devices where `navigator.deviceMemory <= 4` (or on `gpu.device.lost`), `ai-scorer.worker.ts` loads 1 model at a time, runs inference, and calls `session.release()` before loading the next model — keeping peak RAM $< 280\text{ MB}$. |
+| **5** | **Corrupted Cloud Pull or Backup Import Midway** | Network drops or power dies while overwriting `/db/ielts.sqlite3` during **"Pull from Cloud"** or file import. | **Blue-Green Atomic File Swap + 7-Day Rollback**: Incoming data is written to `ielts.incoming.sqlite3` and verified with `PRAGMA integrity_check;`. The old DB is moved to `ielts.rollback.sqlite3` (enabling 1-click **"Undo Last Pull/Import"**) before promoting the new DB. |
+| **6** | **Two-Phase Cloud Upload (`PUT /api/cloud/snapshot`)** | User's connection drops at 80% while uploading snapshot to Cloudflare R2, risking a half-written cloud backup. | **Staging Key Promotion on Worker**: Worker streams upload to `/snapshots/{uid}/staging_{sha256}.tmp`, verifies exact byte length and SHA-256 hash on the edge, and **only then** copies to `latest.ieltsbackup` and updates D1. |
+| **7** | **Background Tab Timer Drift (Writing 40m / Reading 60m)** | Browsers throttle `setInterval(fn, 1000)` when the user switches tabs or minimizes the window. | **Monotonic Wall-Clock Deadline**: Timer state stores `deadline_ms = Date.now() + duration_ms` in SQLite and computes `remaining = deadline_ms - Date.now()` on every frame + `visibilitychange`. Writing drafts auto-save to OPFS every $1,500\text{ ms}$. |
+| **8** | **Storage Quota Full (`QuotaExceededError`) & Incognito Mode** | Browser runs out of disk quota mid-download, or user opens app in Private/Incognito window (which wipes OPFS on close). | **Pre-Download Quota Check & Incognito Banner**: Calls `navigator.storage.estimate()` before downloading models (requires $1.25\times$ free space). Detects ephemeral/incognito storage and shows a persistent reminder to export `.ieltsbackup` before closing. |
+| **9** | **iOS Safari AudioContext Suspended / Sample Rate Mismatch** | iOS Safari forces hardware sample rate ($44.1\text{ kHz}$ or $48\text{ kHz}$) and suspends `AudioContext` unless resumed inside a direct tap handler. | **Sinc Resampler in Worklet + Tap-to-Unlock**: `AudioWorklet` resamples any native hardware rate ($44.1/48\text{ kHz}$) to exact $16,000\text{ Hz}$ mono PCM, and `audioCtx.resume()` is bound directly to the user's button pointer-down event. |
+
+---
+
+## 14. UI Information Architecture, Screen Blueprint & Phased Implementation Roadmap
+
+### 14.1 Complete UI Navigation & Screen Blueprint (Mermaid)
+
+```mermaid
+flowchart TB
+    SHELL["App Shell (Top Navbar: Band Target Pill | Streak | Storage Indicator | Offline/Ready Badge)"]
+
+    SHELL --> TAB1["1. Dashboard (/)<br/>- Estimated Overall Band & 4-Skill Radar Chart<br/>- Recent Sessions & Unscored Audio Queue<br/>- Quick Start Mock Exam Cards<br/>- FSRS Due Today Counter"]
+    SHELL --> TAB2["2. Speaking Lab (/speaking)<br/>- Opt-In Model Banner (Download 76MB vs 0MB Lite Mode)<br/>- Pre-Flight Mic & Noise Meter<br/>- Part 1/2/3 Simulator (Cue Card + 1m Prep Notepad + Waveform)<br/>- 5-Panel Diagnostic Report (Clickable Word Replay, GOP IPA, ERRANT Diff, Pitch Graph)"]
+    SHELL --> TAB3["3. Writing Lab (/writing)<br/>- Academic Task 1 (Interactive SVG Charts) & Task 2<br/>- Split-Screen Editor + Live Word Count + Wall-Clock Timer<br/>- 4-Criterion Rubric Report & Inline Red/Green Diffs"]
+    SHELL --> TAB4["4. Reading & Listening (/reading & /listening)<br/>- Resizable Split Passage Annotator (3-Color Highlighter + Notes)<br/>- All 14 Question Types + Post-Test Evidence Span Jump<br/>- Multi-Section Opus Audio Player + UK/US Answer Normalizer"]
+    SHELL --> TAB5["5. FSRS Review Deck (/review)<br/>- Auto-Extracted Error Cards (Pronunciation, Grammar Cloze, C1 Collocations)<br/>- 4-Button FSRS v5 Grading (Again / Hard / Good / Easy)"]
+    SHELL --> TAB6["6. AI Features & Models (/features)<br/>- Modular AI Pack Cards (Exact MB, Chunk Progress, Speed)<br/>- [Download] [Pause] [Resume] [Delete from Disk]<br/>- OPFS Storage Inspector"]
+    SHELL --> TAB7["7. Account & Backup (/account)<br/>- Local Offline Backup: Export/Import (.ieltsbackup & .ielts-archive.zip)<br/>- 1-Click Rollback Last Import/Pull<br/>- Google Login + Side-by-Side Local vs Cloud Comparison<br/>- Double-Confirmed [Upload to Cloud] & [Pull from Cloud]"]
+```
+
+### 14.2 Repository Layout (Mermaid)
 
 ```mermaid
 flowchart LR
@@ -1162,22 +1227,20 @@ flowchart LR
     ROOT --> DSP["packages/dsp-wasm/<br/>pYIN Pitch & nPVI Rhythm Algorithms"]
     ROOT --> API["workers/api/<br/>Cloudflare Worker (Hono + D1 + R2 + Google OIDC)"]
 
-    WEB --> W_WORKERS["src/workers/<br/>- db.worker.ts<br/>- model-downloader.worker.ts<br/>- audio-dsp.worker.ts<br/>- ai-scorer.worker.ts<br/>- sync.worker.ts"]
+    WEB --> W_WORKERS["src/workers/<br/>- db.worker.ts<br/>- model-downloader.worker.ts<br/>- audio-dsp.worker.ts<br/>- ai-scorer.worker.ts"]
     WEB --> W_BANK["public/data/<br/>- models-manifest.json (Chunk SHA-256s)<br/>- questions/*.json (Pre-generated Bank)<br/>- cefr-lexicon.json<br/>- collocations.json"]
 ```
 
-### 13.2 Phased Implementation Roadmap
+### 14.3 Phased Implementation Roadmap
 
-1. **Phase 1: Core Foundation, HLC, SQLite-WASM OPFS, Multi-Point Resumable Model Downloader & Backup Engine**
-   - Initialize workspace (`apps/web`, `packages/shared`, `workers/api`).
-   - Implement Hybrid Logical Clock (`hlc.ts`), SQLite-WASM OPFS schema (`schema.sql`), and deterministic `.ieltsbackup` / `.ielts-archive.zip` Export & CRDT Smart Merge Import.
-   - Implement `model-downloader.worker.ts` with 4-stream HTTP Range requests, per-chunk SHA-256 verification, OPFS `FileSystemSyncAccessHandle` sparse writes + `flush()`, and crash-resilient resume via `model_download_chunks`.
+1. **Phase 1: App Shell, Full UI Screen Suite & Local-First Database/Backup Core**
+   - Initialize workspace (`apps/web`, `packages/shared`, `workers/api`) and build the complete 7-Tab UI Shell (`Dashboard`, `Speaking Lab`, `Writing Lab`, `Reading Simulator`, `Listening Simulator`, `FSRS Review Deck`, `/features` Model Manager, and `/account` Backup & Cloud Sync).
+   - Implement Multi-Tab Leader Election, SQLite-WASM OPFS schema (`schema.sql`), Blue-Green Atomic DB Swap, and `.ieltsbackup` / `.ielts-archive.zip` Export & Import.
+   - Implement `model-downloader.worker.ts` with 4-stream HTTP Range requests, per-chunk SHA-256 verification, OPFS sparse writes + `flush()`, and strict opt-in pause/resume controls.
 2. **Phase 2: Pre-Generated Question Bank & Two-Stage Specialist Scoring Engine**
    - Seed curated Speaking (Part 1/2/3), Writing (Task 1 SVG charts + Task 2), Reading, and Listening question packs with pre-computed semantic anchors and target collocations.
    - Implement the 5 Specialist Extractors + Stage 2 Trained Psychometric Band Calibrator ($\text{FC}, \text{LR}, \text{GRA}, \text{P}$) + official half-band rounding + unit tests.
 3. **Phase 3: Real-Time Audio Worklet, VAD, Prosody DSP & ONNX Worker Integration**
-   - Wire `AudioWorkletProcessor` ($16\text{ kHz}$ PCM) + `MediaRecorder` (Opus to OPFS) + Silero VAD v5 + Pitch/nPVI DSP + Whisper ONNX + Wav2Vec2-GOPT + Flan-T5-GEC/DeBERTa.
-4. **Phase 4: Interactive Exam Simulators & FSRS v5 Review Deck UI**
-   - Build Speaking Mock Room (with clickable word-timestamp replay & pitch contour visualization), Writing Split-Editor, Reading 3-Pane Annotator, Listening Player, and FSRS v5 Flashcard UI.
-5. **Phase 5: Cloudflare Edge Worker, Google OAuth 2.0 & Multi-Device Delta Sync**
-   - Implement Hono Worker endpoints (`/api/auth/google/*`, `/api/sync/push`, `/api/sync/pull`, `/api/audio/:sha256`), D1 migrations, R2 ring-buffer quota enforcement, and end-to-end sync tests.
+   - Wire `AudioWorkletProcessor` ($16\text{ kHz}$ PCM) + 2-second timeslice `MediaRecorder` (Opus to OPFS) + Silero VAD v5 + Pitch/nPVI DSP + Whisper ONNX + Wav2Vec2-GOPT + Flan-T5-GEC/DeBERTa + Retroactive Scoring for saved `.opus` attempts.
+4. **Phase 4: Cloudflare Edge Worker, Google OAuth 2.0 & Double-Confirmed Cloud Snapshot Push/Pull**
+   - Implement Hono Worker endpoints (`/api/auth/google/*`, `/api/cloud/meta`, `PUT /api/cloud/snapshot`, `GET /api/cloud/snapshot`), D1 migrations (`0001_init.sql`), and two-phase R2 atomic upload.
