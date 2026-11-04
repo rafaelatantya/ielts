@@ -5,6 +5,8 @@ import { AppShell } from './components/layout/AppShell'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { SpeakingPage } from './pages/SpeakingPage'
+import { SpeakingSimulatorPage } from './pages/SpeakingSimulatorPage'
+import { SpeakingReportPage } from './pages/SpeakingReportPage'
 import { WritingPage } from './pages/WritingPage'
 import { ReadingPage } from './pages/ReadingPage'
 import { ListeningPage } from './pages/ListeningPage'
@@ -31,6 +33,8 @@ export const AppContent: React.FC = () => {
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardGuard />} />
           <Route path="/speaking" element={<SpeakingPage />} />
+          <Route path="/speaking/session/:sessionId" element={<SpeakingSimulatorPage />} />
+          <Route path="/speaking/report/:attemptId" element={<SpeakingReportPage />} />
           <Route path="/writing" element={<WritingPage />} />
           <Route path="/reading" element={<ReadingPage />} />
           <Route path="/listening" element={<ListeningPage />} />
