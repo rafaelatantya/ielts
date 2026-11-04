@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { ModelPlaygroundTab } from '../components/features/ModelPlaygroundTab'
 import {
   getStorageEstimate,
   getTier2SpeakingModelStatus,
@@ -84,6 +85,8 @@ const STORAGE_KEYS = {
 }
 
 export const FeaturesPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'downloads' | 'playground'>('downloads')
+
   // CDN & Parallel Stream selectors
   const [cdnMirror, setCdnMirror] = useState<string>(() => {
     return (
@@ -568,17 +571,60 @@ export const FeaturesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-border-subtle pb-4">
+      <div className="border-b border-border-subtle pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="font-serif text-2xl font-semibold text-primary">
           AI Features & Offline Model Manager
         </h1>
+
+        {/* Top Tab Switcher */}
+        <div className="inline-flex rounded-sm p-1 bg-[#F4F0EA] border border-border-subtle">
+          <button
+            type="button"
+            id="tab-btn-downloads"
+            onClick={() => setActiveTab('downloads')}
+            className={`font-sans text-xs font-semibold px-4 py-1.5 rounded-xs transition-colors cursor-pointer ${
+              activeTab === 'downloads'
+                ? 'bg-[#1E3A5F] text-white shadow-xs'
+                : 'bg-[#F4F0EA] text-secondary hover:text-primary'
+            }`}
+          >
+            Model Downloads & Storage
+          </button>
+          <button
+            type="button"
+            id="tab-btn-playground"
+            onClick={() => setActiveTab('playground')}
+            className={`font-sans text-xs font-semibold px-4 py-1.5 rounded-xs transition-colors cursor-pointer ${
+              activeTab === 'playground'
+                ? 'bg-[#1E3A5F] text-white shadow-xs'
+                : 'bg-[#F4F0EA] text-secondary hover:text-primary'
+            }`}
+          >
+            Test Downloaded Models & Features
+          </button>
+        </div>
       </div>
 
-      {/* 2.2 feat-storage-meter */}
-      <section
-        id="feat-storage-meter"
-        className="bg-surface-card rounded-md border border-border-subtle p-5 shadow-paper space-y-4"
-      >
+      {activeTab === 'playground' ? (
+        <ModelPlaygroundTab
+          packReadyMap={{
+            tier1: packStates.tier1?.status === 'ready',
+            tier2: packStates.tier2?.status === 'ready',
+            tier3: packStates.tier3?.status === 'ready',
+            tts: packStates.tts?.status === 'ready',
+          }}
+          onRequestDownload={(packId) => {
+            setActiveTab('downloads')
+            startDownloadSimulation(packId)
+          }}
+        />
+      ) : (
+        <>
+          {/* 2.2 feat-storage-meter */}
+          <section
+            id="feat-storage-meter"
+            className="bg-surface-card rounded-md border border-border-subtle p-5 shadow-paper space-y-4"
+          >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-subtle pb-3">
           <h2 className="font-serif text-base font-semibold text-primary">
             Local Storage Allocation
@@ -908,6 +954,8 @@ export const FeaturesPage: React.FC = () => {
           )
         })}
       </div>
+        </>
+      )}
     </div>
   )
 }
