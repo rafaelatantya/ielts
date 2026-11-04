@@ -438,34 +438,7 @@ export const FeaturesPage: React.FC = () => {
         <h1 className="font-serif text-2xl font-semibold text-primary">
           AI Features & Offline Model Manager
         </h1>
-        <p className="font-sans text-xs text-secondary mt-1">
-          Zero auto-download control center. All models are 100% opt-in and stored in OPFS disk.
-        </p>
       </div>
-
-      {/* 2.1 feat-quota-banner */}
-      <section
-        id="feat-quota-banner"
-        className="rounded-md p-4 border flex flex-col sm:flex-row items-start sm:items-center gap-3.5"
-        style={{
-          backgroundColor: '#EAF3EC',
-          color: '#166534',
-          borderColor: '#166534',
-        }}
-      >
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#166534] shrink-0" />
-          <span className="font-serif text-sm font-semibold tracking-wide">
-            Strict Zero Auto-Download Policy Active
-          </span>
-        </div>
-        <div className="font-sans text-xs leading-relaxed opacity-95">
-          AI models are never downloaded automatically. When you click Download below, files are
-          fetched across 4 parallel HTTP Range streams in 4 MiB SHA-256 chunks directly into OPFS
-          disk—if you close the browser or your device powers off, you can resume from the exact
-          last verified chunk.
-        </div>
-      </section>
 
       {/* 2.2 feat-storage-meter */}
       <section
@@ -474,10 +447,10 @@ export const FeaturesPage: React.FC = () => {
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-subtle pb-3">
           <h2 className="font-serif text-base font-semibold text-primary">
-            Local Browser OPFS Disk Allocation
+            Local Storage Allocation
           </h2>
           <div className="font-mono text-xs text-secondary tabular-nums">
-            SQLite DB: {dbMb} MB · Voice Recordings: {audMb} MB · AI Models: {modMb} MB · Free Quota:{' '}
+            Study History: {dbMb} MB · Voice Recordings: {audMb} MB · AI Models: {modMb} MB · Free Quota:{' '}
             {freeGb} GB
           </div>
         </div>
@@ -487,7 +460,7 @@ export const FeaturesPage: React.FC = () => {
           <div
             style={{ width: '4%' }}
             className="bg-[#1E3A5F] h-full"
-            title={`SQLite DB: ${dbMb} MB`}
+            title={`Study History: ${dbMb} MB`}
           />
           <div
             style={{ width: '8%' }}
@@ -511,7 +484,7 @@ export const FeaturesPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-sans text-secondary pt-1">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-[#1E3A5F]" />
-            <span>SQLite DB & Study History ({dbMb} MB)</span>
+            <span>Study History ({dbMb} MB)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-[#9A3412]" />
@@ -523,7 +496,7 @@ export const FeaturesPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-[#E2D9CA]" />
-            <span>Free Browser Quota ({freeGb} GB Free)</span>
+            <span>Free Browser Space ({freeGb} GB Free)</span>
           </div>
         </div>
 
@@ -654,15 +627,15 @@ export const FeaturesPage: React.FC = () => {
                   <div className="font-mono text-[12px] text-secondary tabular-nums space-y-1 pt-1">
                     <div className="text-primary font-medium">
                       {isReady
-                        ? `Status: Ready on Disk (SHA-256 Verified · ${cfg.sizeMb} MB / ${cfg.sizeMb} MB)`
+                        ? `Status: Ready (${cfg.sizeMb} MB / ${cfg.sizeMb} MB)`
                         : isPaused
-                        ? `Status: Paused at ${pct}% (${verifiedCount} / ${cfg.totalChunks} Chunks Verified on Disk — ${verifiedMb} MB / ${cfg.sizeMb} MB)`
+                        ? `Status: Paused at ${pct}% (${verifiedCount} / ${cfg.totalChunks} Chunks — ${verifiedMb} MB / ${cfg.sizeMb} MB)`
                         : isDownloading
-                        ? `Status: Downloading at ${pct}% (${verifiedCount} / ${cfg.totalChunks} Chunks Verified on Disk — ${verifiedMb} MB / ${cfg.sizeMb} MB)`
-                        : `Status: 0 / ${cfg.totalChunks} Chunks Verified (0.0 MB / ${cfg.sizeMb} MB)`}
+                        ? `Status: Downloading at ${pct}% (${verifiedCount} / ${cfg.totalChunks} Chunks — ${verifiedMb} MB / ${cfg.sizeMb} MB)`
+                        : `Status: 0 / ${cfg.totalChunks} Chunks (0.0 MB / ${cfg.sizeMb} MB)`}
                     </div>
                     <div>
-                      {verifiedCount} / {cfg.totalChunks} Chunks Verified ({verifiedMb} MB /{' '}
+                      {verifiedCount} / {cfg.totalChunks} Chunks ({verifiedMb} MB /{' '}
                       {cfg.sizeMb} MB) · {state.speedMb.toFixed(1)} MB/s · ETA {etaFormatted}
                     </div>
                   </div>
@@ -711,11 +684,11 @@ export const FeaturesPage: React.FC = () => {
                 {isReady && (
                   <span className="font-sans text-xs font-semibold px-3 py-1.5 bg-[#EAF3EC] text-[#166534] border border-[#166534] rounded-sm flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#166534]" />
-                    Ready on Disk ✓
+                    Ready on Device ✓
                   </span>
                 )}
 
-                {/* Verify SHA-256 button */}
+                {/* Verify File button */}
                 {(isReady || verifiedCount > 0) && (
                   <button
                     type="button"
@@ -723,7 +696,7 @@ export const FeaturesPage: React.FC = () => {
                     onClick={() => handleVerify(cfg.id)}
                     className="font-sans text-xs font-medium px-3 py-1.5 bg-white text-secondary hover:text-primary border border-[#C7BFA8] rounded-sm transition-colors disabled:opacity-50"
                   >
-                    {state.isVerifying ? 'Verifying...' : 'Verify SHA-256 Integrity'}
+                    {state.isVerifying ? 'Verifying...' : 'Verify File Integrity'}
                   </button>
                 )}
 
@@ -734,7 +707,7 @@ export const FeaturesPage: React.FC = () => {
                     onClick={() => handleDelete(cfg.id)}
                     className="font-sans text-xs font-medium px-3 py-1.5 bg-[#FEE2E2] hover:bg-[#fca5a5] text-[#991B1B] rounded-sm transition-colors ml-auto"
                   >
-                    Delete from Disk
+                    Delete from Device
                   </button>
                 )}
               </div>

@@ -9,7 +9,6 @@ import {
   exportFullStudioArchiveZip,
   parseBackupFile,
   applyCleanOverwrite,
-  applySmartMerge,
   saveRollbackSnapshot,
   getRollbackTimestamp,
   restoreFromRollback,
@@ -102,13 +101,13 @@ export const AccountPage: React.FC = () => {
   const [overwriteInput, setOverwriteInput] = useState<string>('')
 
   // Offline Import Dropzone state
-  const [importMode, setImportMode] = useState<'smart_merge' | 'clean_overwrite'>('smart_merge')
   const [stagedImportFile, setStagedImportFile] = useState<{
     file: File
     payload: IeltsBackupPayload
     sessionCount: number
     exportedAt: string
   } | null>(null)
+  const [replaceAcknowledged, setReplaceAcknowledged] = useState<boolean>(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -159,7 +158,7 @@ export const AccountPage: React.FC = () => {
     }
     setUser(simulatedUser)
     localStorage.setItem('oxford_cloud_user', JSON.stringify(simulatedUser))
-    setStatusMessage('Signed in with Google (OAuth 2.0 PKCE).')
+    setStatusMessage('Signed in with Google.')
   }
 
   const handleGoogleLogout = () => {
@@ -177,7 +176,7 @@ export const AccountPage: React.FC = () => {
         // keep
       }
     }
-    setStatusMessage('Cloud metadata refreshed from Cloudflare D1.')
+    setStatusMessage('Cloud metadata refreshed.')
   }
 
   // Open double-confirmation modal
@@ -250,29 +249,23 @@ export const AccountPage: React.FC = () => {
         sessionCount: count,
         exportedAt: payload.exported_at || new Date().toISOString(),
       })
-      setStatusMessage(`Loaded ${file.name} (SHA-256 Verified). Select merge mode below to apply.`)
+      setReplaceAcknowledged(false)
+      setStatusMessage(`Loaded ${file.name}. Review and confirm to replace local browser data.`)
     } catch {
-      alert('Invalid backup file. Could not parse .ieltsbackup or .ielts-archive.zip.')
+      alert('Invalid backup file. Please ensure it is a valid backup archive.')
     }
   }
 
   // Apply Staged File Import
   const handleApplyImport = () => {
-    if (!stagedImportFile) return
+    if (!stagedImportFile || !replaceAcknowledged) return
 
     saveRollbackSnapshot()
-
-    if (importMode === 'clean_overwrite') {
-      applyCleanOverwrite(stagedImportFile.payload)
-      setStatusMessage(`Clean overwrite applied from ${stagedImportFile.file.name}. Previous database saved to rollback slot.`)
-    } else {
-      const res = applySmartMerge(stagedImportFile.payload)
-      setStatusMessage(
-        `CRDT/HLC smart merge complete! Combined ${res.mergedSessions} sessions, ${res.mergedSpeaking} speaking attempts, and ${res.mergedSrs} SRS cards.`
-      )
-    }
+    applyCleanOverwrite(stagedImportFile.payload)
+    setStatusMessage(`Local browser data replaced from ${stagedImportFile.file.name}. Previous data saved to rollback slot.`)
 
     setStagedImportFile(null)
+    setReplaceAcknowledged(false)
     refreshLocalStats()
   }
 
@@ -295,7 +288,7 @@ export const AccountPage: React.FC = () => {
           Account, Offline Backup & Manual Cloud Sync
         </h1>
         <p className="font-sans text-xs text-secondary mt-1">
-          Sovereign local data ownership, offline backups, and optional Google OAuth cloud snapshots.
+          Manage local backups and optional cloud sync for your study progress.
         </p>
       </div>
 
@@ -317,21 +310,12 @@ export const AccountPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4">
           <div>
             <h2 id="acc-cloud-header" className="font-serif text-[22px] font-semibold text-primary leading-tight">
-              Manual Cloud Snapshot Sync (Google Account)
+              Cloud Backup & Sync
             </h2>
             <p className="font-sans text-xs text-secondary mt-1">
-              Optional Cloudflare D1 + R2 snapshot storage. Strictly manual—zero auto-sync.
+              Sync your study progress across devices when you choose.
             </p>
           </div>
-
-          {/* acc-zero-sync-badge */}
-          <span
-            id="acc-zero-sync-badge"
-            className="px-3 py-1.5 rounded-sm font-sans text-xs font-medium self-start sm:self-auto border border-[#166534]"
-            style={{ backgroundColor: '#EAF3EC', color: '#166534' }}
-          >
-            Zero Background Sync: Server is only contacted when you click Upload or Pull below.
-          </span>
         </div>
 
         {/* State 1: Logged Out */}
@@ -353,7 +337,7 @@ export const AccountPage: React.FC = () => {
                 className="font-sans text-xs font-semibold px-4 py-2.5 bg-white text-primary border border-[#C7BFA8] rounded-sm hover:bg-[#F4F0EA] transition-colors shadow-sm inline-flex items-center gap-2 cursor-pointer"
               >
                 <span className="font-serif font-bold text-sm text-[#9A3412]">G</span>
-                Sign in with Google to Compare & Sync Snapshots
+                Sign in with Google
               </button>
             </div>
           </div>
@@ -372,9 +356,6 @@ export const AccountPage: React.FC = () => {
                 <div>
                   <div className="font-sans text-xs font-semibold text-primary">
                     Signed in as {user.name} ({user.email})
-                  </div>
-                  <div className="font-mono text-[11px] text-[#166534]">
-                    Zero Auto-Sync Mode: Active
                   </div>
                 </div>
               </div>
@@ -411,7 +392,7 @@ export const AccountPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-2 border-b border-border-subtle pb-3">
                   <div>
                     <h3 className="font-serif text-base font-semibold text-primary flex items-center gap-1.5">
-                      <span>💻</span> This Device (Local OPFS SQLite)
+                      <span>💻</span> This Device
                     </h3>
                     <div className="font-mono text-xs text-secondary tabular-nums mt-1">
                       Last Updated: {formatTimestamp(localStats.updatedAt)}
@@ -473,7 +454,7 @@ export const AccountPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-2 border-b border-border-subtle pb-3">
                   <div>
                     <h3 className="font-serif text-base font-semibold text-primary flex items-center gap-1.5">
-                      <span>☁️</span> Google Cloud Snapshot (Cloudflare D1 + R2)
+                      <span>☁️</span> Google Cloud Backup
                     </h3>
                     <div className="font-mono text-xs text-secondary tabular-nums mt-1">
                       Last Updated: {formatTimestamp(cloudMeta.updatedAt)}
@@ -534,9 +515,9 @@ export const AccountPage: React.FC = () => {
                     <span className="text-primary truncate">{cloudMeta.deviceLabel}</span>
                   </div>
                   <div className="flex justify-between py-1 pt-1.5 border-t border-border-subtle text-[11px] text-secondary">
-                    <span>Snapshot Size & Hash:</span>
+                    <span>Snapshot Size & Checksum:</span>
                     <span>
-                      {cloudMeta.sizeKb} KB | sha256: {cloudMeta.hashShort}
+                      {cloudMeta.sizeKb} KB | {cloudMeta.hashShort}
                     </span>
                   </div>
                 </div>
@@ -618,11 +599,10 @@ export const AccountPage: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 rounded-sm bg-[#FBF9F5] border border-border-subtle space-y-2.5">
                 <div className="font-sans text-xs font-semibold text-primary">
-                  Option 1: Compact Progress Backup (.ieltsbackup JSON.gz, ~450 KB)
+                  Option 1: Progress Backup (.zip)
                 </div>
                 <p className="font-sans text-xs text-secondary leading-relaxed">
-                  Exports all sessions, transcripts, band scores, writing essays, and FSRS cards +
-                  SHA-256 manifest checksum.
+                  Saves your study sessions, transcripts, band scores, writing essays, and flashcards.
                 </p>
                 <button
                   type="button"
@@ -630,17 +610,16 @@ export const AccountPage: React.FC = () => {
                   onClick={() => exportIeltsBackup()}
                   className="font-sans text-xs font-semibold px-4 py-2 bg-[#F4F0EA] hover:bg-[#e8e2d8] text-primary border border-border-subtle rounded-sm transition-colors cursor-pointer"
                 >
-                  Export Compact Progress (.ieltsbackup JSON.gz)
+                  Export Progress Backup (.zip)
                 </button>
               </div>
 
               <div className="p-4 rounded-sm bg-[#FBF9F5] border border-border-subtle space-y-2.5">
                 <div className="font-sans text-xs font-semibold text-primary">
-                  Option 2: Full Studio Archive with Voice Recordings (.ielts-archive.zip)
+                  Option 2: Full Backup with Audio (.zip)
                 </div>
                 <p className="font-sans text-xs text-secondary leading-relaxed">
-                  Exports the raw SQLite .db binary + JSON dump + all /audio/attempts/*.opus voice
-                  recordings.
+                  Saves all study progress plus your recorded speaking audio files.
                 </p>
                 <button
                   type="button"
@@ -648,7 +627,7 @@ export const AccountPage: React.FC = () => {
                   onClick={() => exportFullStudioArchiveZip()}
                   className="font-sans text-xs font-semibold px-4 py-2 bg-[#F4F0EA] hover:bg-[#e8e2d8] text-primary border border-border-subtle rounded-sm transition-colors cursor-pointer"
                 >
-                  Export Full Studio Archive (.ielts-archive.zip with Audio)
+                  Export Full Backup with Audio (.zip)
                 </button>
               </div>
             </div>
@@ -660,9 +639,6 @@ export const AccountPage: React.FC = () => {
               <h3 className="font-serif text-base font-semibold text-primary">
                 Offline Import & Merge Control
               </h3>
-              <p className="font-sans text-xs text-secondary mt-1">
-                Drag-and-drop verification with automatic rollback snapshot preservation.
-              </p>
             </div>
 
             {/* acc-import-dropzone */}
@@ -677,7 +653,7 @@ export const AccountPage: React.FC = () => {
               className="block p-6 rounded-md bg-[#F4F0EA] border-2 border-dashed border-[#C7BFA8] hover:border-accent-navy text-center cursor-pointer transition-colors"
             >
               <div className="font-sans text-xs text-secondary leading-relaxed">
-                Drop .ieltsbackup or .ielts-archive.zip here, or click to select file
+                Drop backup (.zip) file here, or click to select file
               </div>
               <input
                 ref={fileInputRef}
@@ -691,82 +667,41 @@ export const AccountPage: React.FC = () => {
               />
             </label>
 
-            {/* Staged File Information & Mode Selection */}
-            {stagedImportFile ? (
-              <div className="p-4 bg-[#FBF9F5] border border-border-subtle rounded-sm space-y-3">
-                <div className="font-sans text-xs font-semibold text-primary flex items-center justify-between">
-                  <span>File: {stagedImportFile.file.name}</span>
-                  <span className="font-mono text-[11px] text-[#166534]">SHA-256 Verified ✓</span>
-                </div>
-                <div className="font-mono text-xs text-secondary tabular-nums">
-                  Exported At: {formatTimestamp(new Date(stagedImportFile.exportedAt).getTime())} ·
-                  Sessions in file: {stagedImportFile.sessionCount}
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-border-subtle">
-                  <div className="font-sans text-xs font-medium text-primary">
-                    Select Database Import Protocol:
-                  </div>
-
-                  <label className="flex items-start gap-2 text-xs font-sans text-primary cursor-pointer">
-                    <input
-                      type="radio"
-                      name="importMode"
-                      value="smart_merge"
-                      checked={importMode === 'smart_merge'}
-                      onChange={() => setImportMode('smart_merge')}
-                      className="mt-0.5 text-accent-navy focus:ring-accent-navy"
-                    />
-                    <div>
-                      <span className="font-semibold">Smart Merge (CRDT/HLC — Keep Both)</span>
-                      <p className="text-secondary text-[11px]">
-                        Non-destructively combines sessions from both databases without losing
-                        anything.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start gap-2 text-xs font-sans text-primary cursor-pointer">
-                    <input
-                      type="radio"
-                      name="importMode"
-                      value="clean_overwrite"
-                      checked={importMode === 'clean_overwrite'}
-                      onChange={() => setImportMode('clean_overwrite')}
-                      className="mt-0.5 text-accent-navy focus:ring-accent-navy"
-                    />
-                    <div>
-                      <span className="font-semibold">Clean Overwrite (Replace This Device)</span>
-                      <p className="text-secondary text-[11px]">
-                        Atomically swaps local database with the imported file. Previous data is saved
-                        in rollback slot.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStagedImportFile(null)}
-                    className="font-sans text-xs px-3 py-1.5 bg-white text-secondary border border-border-subtle rounded-sm hover:text-primary cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApplyImport}
-                    className="font-sans text-xs font-semibold px-4 py-1.5 bg-[#9A3412] text-white rounded-sm hover:bg-[#832b0e] cursor-pointer"
-                  >
-                    Apply Import
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center font-sans text-[11px] text-secondary py-2">
-                Drop a file above to configure Smart Merge (CRDT/HLC — Keep Both) vs. Clean Overwrite (Replace This Device).
+            {stagedImportFile && (
+              <div className="p-3 bg-[#FBF9F5] border border-border-subtle rounded-sm font-sans text-xs text-primary flex items-center justify-between">
+                <span>Selected: {stagedImportFile.file.name} ({stagedImportFile.sessionCount} sessions)</span>
+                <button
+                  type="button"
+                  onClick={() => setStagedImportFile(null)}
+                  className="text-secondary hover:text-primary cursor-pointer text-xs"
+                >
+                  ✕
+                </button>
               </div>
             )}
+
+            <div className="space-y-4 pt-1">
+              <label className="flex items-start gap-2 text-xs font-sans text-primary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={replaceAcknowledged}
+                  onChange={(e) => setReplaceAcknowledged(e.target.checked)}
+                  className="mt-0.5 text-accent-navy focus:ring-accent-navy"
+                />
+                <span className="leading-relaxed">
+                  I am aware that my local browser data will be replaced by this file
+                </span>
+              </label>
+
+              <button
+                type="button"
+                disabled={!stagedImportFile || !replaceAcknowledged}
+                onClick={handleApplyImport}
+                className="w-full font-sans text-xs font-semibold px-4 py-2.5 bg-[#9A3412] hover:bg-[#832b0e] text-white rounded-sm shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Proceed
+              </button>
+            </div>
           </div>
         </div>
       </section>

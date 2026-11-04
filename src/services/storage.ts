@@ -339,12 +339,12 @@ export async function exportIeltsBackup(): Promise<IeltsBackupPayload> {
   snapshot.local_meta = updatedMeta
 
   const jsonString = JSON.stringify(snapshot, null, 2)
-  const blob = new Blob([jsonString], { type: 'application/json' })
+  const blob = new Blob([jsonString], { type: 'application/zip' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   const dateStr = new Date().toISOString().slice(0, 10)
   a.href = url
-  a.download = `oxford-atelier-${dateStr}.ieltsbackup`
+  a.download = `ielts-progress-backup-${dateStr}.zip`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -389,7 +389,7 @@ export async function exportFullStudioArchiveZip(): Promise<void> {
   const a = document.createElement('a')
   const dateStr = new Date().toISOString().slice(0, 10)
   a.href = url
-  a.download = `oxford-atelier-archive-${dateStr}.ielts-archive.zip`
+  a.download = `ielts-full-backup-${dateStr}.zip`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

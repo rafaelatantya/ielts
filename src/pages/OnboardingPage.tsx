@@ -48,8 +48,8 @@ export const OnboardingPage: React.FC = () => {
           (await navigator.storage.persisted())
         setPersistMessage(
           nativePersisted
-            ? '✓ Browser eviction lock granted & OPFS volume verified.'
-            : '✓ OPFS local volume initialized & locked on disk.'
+            ? '✓ Browser eviction lock granted & local storage volume verified.'
+            : '✓ local storage volume initialized & locked on disk.'
         )
       }
     } finally {
@@ -75,7 +75,7 @@ export const OnboardingPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Import failed:', err)
-      alert('Failed to parse backup file. Please ensure it is a valid .ieltsbackup file.')
+      alert('Failed to parse backup file. Please ensure it is a valid backup (.zip) file.')
     }
   }
 
@@ -289,7 +289,7 @@ export const OnboardingPage: React.FC = () => {
           {/* Step 3: Secondary / Restore Link */}
           <div className="pt-2 border-t border-border-subtle space-y-2">
             <p className="font-sans text-xs text-secondary">
-              Already have a .ieltsbackup file or a Google Cloud Snapshot?
+              Already have a backup (.zip) file or a Google Cloud Snapshot?
             </p>
             <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
               <button
@@ -298,7 +298,7 @@ export const OnboardingPage: React.FC = () => {
                 onClick={() => fileInputRef.current?.click()}
                 className="text-accent-navy underline hover:text-primary transition-colors cursor-pointer text-left"
               >
-                Already have a .ieltsbackup file? Import Progress
+                Already have a backup (.zip) file? Import Progress
               </button>
               <input
                 ref={fileInputRef}
