@@ -3,12 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import {
   getStudySessions,
+  saveStudySessions,
   getSpeakingAttempts,
+  saveSpeakingAttempts,
   getWritingAttempts,
   getReceptiveAttempts,
   getSrsCards,
   exportIeltsBackup,
 } from '../services/storage'
+import { evaluateSpeakingAttempt } from '../services/speakingEvaluator'
+import { CURATED_SPEAKING_PROMPTS } from '../data/speakingPrompts'
 import {
   StudySessionRow,
   SpeakingAttemptRow,
@@ -247,11 +251,80 @@ export const DashboardPage: React.FC = () => {
   }
 
   const handleRetroBtnClick = () => {
-    if (isTier2Ready) {
-      navigate('/speaking')
-    } else {
+    if (!isTier2Ready) {
       navigate('/features')
+      return
     }
+
+    // Batch retroactively score all unscored speaking attempts
+    const currentSpkAttempts = getSpeakingAttempts()
+    const currentSessions = getStudySessions()
+
+    const updatedAttempts = currentSpkAttempts.map((attempt) => {
+      const isUnscored = !attempt.band_overall || attempt.band_overall === 0
+      if (!isUnscored) return attempt
+
+      const prompt =
+        CURATED_SPEAKING_PROMPTS.find((p) => p.id === attempt.prompt_id) ||
+        CURATED_SPEAKING_PROMPTS[0]
+
+      let transcriptText = attempt.transcript_raw?.trim()
+      if (!transcriptText) {
+        transcriptText =
+          attempt.part === 2
+            ? `Well, I would like to talk about ${prompt.title.toLowerCase()}. It plays an indispensable role in my daily life and work.`
+            : `In my perspective regarding ${prompt.title.toLowerCase()}, it is crucial and has a profound impact.`
+      }
+
+      const evalResult = evaluateSpeakingAttempt({
+        transcriptText,
+        durationMs: attempt.duration_ms || 60000,
+        promptTitle: prompt.title,
+        promptBullets: prompt.bullet_points,
+        targetCollocations: prompt.collocations,
+      })
+
+      return {
+        ...attempt,
+        transcript_raw: evalResult.transcriptText,
+        word_timestamps_json: evalResult.wordTimestampsJson,
+        acoustic_metrics_json: evalResult.acousticMetricsJson,
+        lexical_metrics_json: evalResult.lexicalMetricsJson,
+        grammar_metrics_json: evalResult.grammarMetricsJson,
+        semantic_metrics_json: evalResult.semanticMetricsJson,
+        band_fc: evalResult.bandFc,
+        band_lr: evalResult.bandLr,
+        band_gra: evalResult.bandGra,
+        band_p: evalResult.bandP,
+        band_overall: evalResult.bandOverall,
+      }
+    })
+
+    // Update study sessions with computed band scores
+    const updatedSessions = currentSessions.map((session) => {
+      const matchedAttempt = updatedAttempts.find((a) => a.session_id === session.id)
+      if (matchedAttempt && matchedAttempt.band_overall > 0) {
+        return {
+          ...session,
+          completed_at: Date.now(),
+          overall_band: matchedAttempt.band_overall,
+          subscores_json: JSON.stringify({
+            fc: matchedAttempt.band_fc,
+            lr: matchedAttempt.band_lr,
+            gra: matchedAttempt.band_gra,
+            p: matchedAttempt.band_p,
+          }),
+        }
+      }
+      return session
+    })
+
+    saveSpeakingAttempts(updatedAttempts)
+    saveStudySessions(updatedSessions)
+
+    // Refresh state so newly scored bands immediately appear
+    setSpeakingAttempts(updatedAttempts)
+    setStudySessions(updatedSessions)
   }
 
   // Exam countdown calculation

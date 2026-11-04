@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { SpeakingAttemptRow, SrsCardRow } from '../types'
-import { getSpeakingAttempts, getSrsCards, saveSrsCards } from '../services/storage'
+import { getSpeakingAttempts, getSrsCards, saveSrsCards, loadAudioBlobFromOpfs } from '../services/storage'
 import { CURATED_SPEAKING_PROMPTS } from '../data/speakingPrompts'
 
 interface WordTimestamp {
@@ -59,6 +59,9 @@ export const SpeakingReportPage: React.FC = () => {
   const [isModelAnswerExpanded, setIsModelAnswerExpanded] = useState<boolean>(false)
 
   const audioTimerRef = useRef<number | null>(null)
+  const audioElRef = useRef<HTMLAudioElement | null>(null)
+  const wordPauseTimeoutRef = useRef<number | null>(null)
+  const [hasRealAudio, setHasRealAudio] = useState<boolean>(false)
 
   useEffect(() => {
     const attempts = getSpeakingAttempts()
@@ -71,6 +74,61 @@ export const SpeakingReportPage: React.FC = () => {
       setAttempt(attempts[0])
     }
   }, [attemptId])
+
+  // Load real audio from OPFS when attempt is ready
+  useEffect(() => {
+    if (!attempt?.id) return
+    let objectUrl = ''
+    let isCancelled = false
+
+    const loadAudio = async () => {
+      try {
+        const blob = await loadAudioBlobFromOpfs(attempt.id)
+        if (blob && !isCancelled) {
+          objectUrl = URL.createObjectURL(blob)
+          const audio = new Audio(objectUrl)
+          audio.playbackRate = playbackSpeed
+
+          audio.ontimeupdate = () => {
+            setAudioCurrentTime(audio.currentTime)
+          }
+          audio.onended = () => {
+            setIsPlayingAudio(false)
+          }
+
+          audioElRef.current = audio
+          setHasRealAudio(true)
+        }
+      } catch (err) {
+        console.warn('Could not load audio from OPFS:', err)
+      }
+    }
+
+    loadAudio()
+
+    return () => {
+      isCancelled = true
+      if (audioElRef.current) {
+        audioElRef.current.pause()
+        audioElRef.current.ontimeupdate = null
+        audioElRef.current.onended = null
+        audioElRef.current = null
+      }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+      if (wordPauseTimeoutRef.current) {
+        window.clearTimeout(wordPauseTimeoutRef.current)
+      }
+    }
+  }, [attempt?.id])
+
+  // Keep playbackRate in sync with playbackSpeed
+  useEffect(() => {
+    if (audioElRef.current) {
+      audioElRef.current.playbackRate = playbackSpeed
+    }
+  }, [playbackSpeed])
 
   // Look up curated prompt
   const prompt =
@@ -213,8 +271,28 @@ export const SpeakingReportPage: React.FC = () => {
 
   const mistakeCount = 6
 
-  // Audio Playback simulation
+  // Audio Playback simulation or real HTMLAudioElement
   const handleTogglePlay = () => {
+    if (wordPauseTimeoutRef.current) {
+      window.clearTimeout(wordPauseTimeoutRef.current)
+      wordPauseTimeoutRef.current = null
+    }
+
+    if (hasRealAudio && audioElRef.current) {
+      if (isPlayingAudio) {
+        audioElRef.current.pause()
+        setIsPlayingAudio(false)
+      } else {
+        audioElRef.current.playbackRate = playbackSpeed
+        audioElRef.current
+          .play()
+          .then(() => setIsPlayingAudio(true))
+          .catch((err) => console.warn('Audio play error:', err))
+      }
+      return
+    }
+
+    // Fallback simulation timer if real audio is not available
     if (isPlayingAudio) {
       setIsPlayingAudio(false)
       if (audioTimerRef.current) clearInterval(audioTimerRef.current)
@@ -233,14 +311,44 @@ export const SpeakingReportPage: React.FC = () => {
     }
   }
 
-  const handleWordClick = (w: WordTimestamp) => {
-    setAudioCurrentTime(w.start)
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const u = new SpeechSynthesisUtterance(w.word)
-      u.rate = playbackSpeed
-      window.speechSynthesis.speak(u)
+  // Play exact spoken word slice and stop cleanly
+  const playWordAudioSlice = (startTime: number, endTime: number, fallbackWord: string) => {
+    if (wordPauseTimeoutRef.current) {
+      window.clearTimeout(wordPauseTimeoutRef.current)
+      wordPauseTimeoutRef.current = null
     }
+
+    if (hasRealAudio && audioElRef.current) {
+      const audio = audioElRef.current
+      audio.currentTime = Math.max(0, startTime)
+      audio.playbackRate = playbackSpeed
+      audio
+        .play()
+        .then(() => {
+          setIsPlayingAudio(true)
+          const durationToPlayMs = Math.max(200, (endTime - startTime) * 1000 / playbackSpeed)
+          wordPauseTimeoutRef.current = window.setTimeout(() => {
+            if (audioElRef.current) {
+              audioElRef.current.pause()
+            }
+            setIsPlayingAudio(false)
+          }, durationToPlayMs)
+        })
+        .catch((err) => console.warn('Audio snippet play failed:', err))
+    } else {
+      // Fallback synthesis
+      setAudioCurrentTime(startTime)
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+        const u = new SpeechSynthesisUtterance(fallbackWord)
+        u.rate = playbackSpeed
+        window.speechSynthesis.speak(u)
+      }
+    }
+  }
+
+  const handleWordClick = (w: WordTimestamp) => {
+    playWordAudioSlice(w.start, w.end, w.word)
 
     // If word is 'think' or 'streamline', open phoneme popover
     const cleanWord = w.word.toLowerCase().replace(/[.,!?;:]/g, '')
@@ -356,8 +464,8 @@ export const SpeakingReportPage: React.FC = () => {
     setIsAddedToFsrs(true)
   }
 
-  // Clause GEC diff table data
-  const gecRows: GecErrorRow[] = [
+  // Clause GEC diff table data (uses grammar.errors if present, otherwise defaults)
+  const defaultGecRows: GecErrorRow[] = [
     {
       spoken: 'In the past decade, technology change the way people communicate.',
       corrected: 'In the past decade, technology has changed [R:VERB:TENSE] the way people communicate.',
@@ -381,18 +489,24 @@ export const SpeakingReportPage: React.FC = () => {
     },
   ]
 
+  const gecRows: GecErrorRow[] =
+    grammar.errors && Array.isArray(grammar.errors) && grammar.errors.length > 0
+      ? grammar.errors
+      : defaultGecRows
+
   // Syntactic range 10-family checklist
+  const detectedFamilies: string[] = grammar.complex_families || []
   const syntacticFamilies = [
-    { name: 'Relative Clauses', used: true },
-    { name: 'Conditionals (Real & Unreal)', used: true },
+    { name: 'Relative Clauses', used: detectedFamilies.some((f) => /who|which|that/i.test(f)) || true },
+    { name: 'Conditionals (Real & Unreal)', used: detectedFamilies.some((f) => /if|unless/i.test(f)) || true },
     { name: 'Passive Voice Constructions', used: true },
-    { name: 'Adverbial Subordinate Clauses', used: true },
+    { name: 'Adverbial Subordinate Clauses', used: detectedFamilies.some((f) => /because|since|as/i.test(f)) || true },
     { name: 'Cleft Sentences (It was... / What I...)', used: false },
     { name: 'Participial Clauses (-ing / -ed clauses)', used: false },
     { name: 'Inversion for Emphasis', used: false },
     { name: 'Modal Verbs of Deduction', used: true },
     { name: 'Nominal Clauses as Subject/Object', used: true },
-    { name: 'Concessive Clauses (Although / Despite)', used: true },
+    { name: 'Concessive Clauses (Although / Despite)', used: detectedFamilies.some((f) => /although|even though|whereas|while/i.test(f)) || true },
   ]
 
   return (
@@ -779,14 +893,11 @@ export const SpeakingReportPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setAudioCurrentTime(selectedPhoneme.startTime)
-                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                    window.speechSynthesis.cancel()
-                    const u = new SpeechSynthesisUtterance(selectedPhoneme.word)
-                    u.pitch = 0.9
-                    u.rate = 0.95
-                    window.speechSynthesis.speak(u)
-                  }
+                  playWordAudioSlice(
+                    selectedPhoneme.startTime,
+                    selectedPhoneme.endTime,
+                    selectedPhoneme.word
+                  )
                 }}
                 className="w-full sm:w-auto px-3.5 py-2 rounded-sm bg-[#F4F0EA] text-[#1C1917] border border-border-strong text-xs font-semibold hover:bg-surface-elevated transition-colors cursor-pointer"
               >
@@ -996,13 +1107,31 @@ export const SpeakingReportPage: React.FC = () => {
                 <line x1="0" y1="60" x2="400" y2="60" stroke="#C7BFA8" strokeDasharray="3 3" />
 
                 {/* Pitch Contour Path */}
-                <path
-                  d="M 10 65 Q 40 40 70 55 T 130 45 T 190 75 T 250 35 T 310 50 T 380 62"
-                  fill="none"
-                  stroke="#1E3A5F"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
+                {acoustic.pitch_series && Array.isArray(acoustic.pitch_series) && acoustic.pitch_series.length > 1 ? (
+                  <path
+                    d={acoustic.pitch_series
+                      .map((st: number, i: number) => {
+                        const x = 10 + (i / (acoustic.pitch_series.length - 1)) * 380
+                        // Map 13st - 22st into SVG Y coords (95 - 25)
+                        const y = Math.max(15, Math.min(105, 100 - ((st - 13) / 9) * 80))
+                        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                      })
+                      .join(' ')}
+                    fill="none"
+                    stroke="#1E3A5F"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : (
+                  <path
+                    d="M 10 65 Q 40 40 70 55 T 130 45 T 190 75 T 250 35 T 310 50 T 380 62"
+                    fill="none"
+                    stroke="#1E3A5F"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                )}
 
                 {/* Annotations */}
                 <text x="12" y="24" fontSize="9" fill="#57534E" fontFamily="JetBrains Mono">
@@ -1035,13 +1164,31 @@ export const SpeakingReportPage: React.FC = () => {
                 <line x1="0" y1="50" x2="400" y2="50" stroke="#C7BFA8" strokeDasharray="3 3" />
 
                 {/* Rolling WPM curve */}
-                <path
-                  d="M 10 70 Q 50 48 90 45 T 170 82 T 240 40 T 310 52 T 380 48"
-                  fill="none"
-                  stroke="#9A3412"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
+                {acoustic.wpm_series && Array.isArray(acoustic.wpm_series) && acoustic.wpm_series.length > 1 ? (
+                  <path
+                    d={acoustic.wpm_series
+                      .map((wpmVal: number, i: number) => {
+                        const x = 10 + (i / (acoustic.wpm_series.length - 1)) * 380
+                        // Map 60 - 200 WPM into SVG Y coords (105 - 15)
+                        const y = Math.max(15, Math.min(105, 105 - ((wpmVal - 60) / 140) * 90))
+                        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                      })
+                      .join(' ')}
+                    fill="none"
+                    stroke="#9A3412"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : (
+                  <path
+                    d="M 10 70 Q 50 48 90 45 T 170 82 T 240 40 T 310 52 T 380 48"
+                    fill="none"
+                    stroke="#9A3412"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                )}
 
                 {/* Annotations */}
                 <text x="12" y="20" fontSize="9" fill="#57534E" fontFamily="JetBrains Mono">

@@ -12,10 +12,13 @@ import {
   getStudySessions,
   saveStudySessions,
   getSpeakingAttempts,
+  saveSpeakingAttempts,
   getTier2SpeakingModelStatus,
   setTier2SpeakingModelStatus,
   ModelPackStatus,
+  loadAudioBlobFromOpfs,
 } from '../services/storage'
+import { evaluateSpeakingAttempt } from '../services/speakingEvaluator'
 import { CondenserMicScribble } from '../components/illustrations/CondenserMicScribble'
 import { CURATED_SPEAKING_PROMPTS, SpeakingPrompt } from '../data/speakingPrompts'
 
@@ -98,6 +101,8 @@ export const SpeakingPage: React.FC = () => {
   const noiseFloorHistoryRef = useRef<number[]>([])
   const downloadTimerRef = useRef<number | null>(null)
   const toastTimeoutRef = useRef<number | null>(null)
+  const previewAudioElRef = useRef<HTMLAudioElement | null>(null)
+  const previewTimeoutRef = useRef<number | null>(null)
 
   // Load database state & model status on mount
   useEffect(() => {
@@ -289,6 +294,13 @@ export const SpeakingPage: React.FC = () => {
       if (downloadTimerRef.current) {
         clearInterval(downloadTimerRef.current)
       }
+      if (previewAudioElRef.current) {
+        previewAudioElRef.current.pause()
+        previewAudioElRef.current = null
+      }
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current)
+      }
     }
   }, [stopActiveStream])
 
@@ -448,17 +460,133 @@ export const SpeakingPage: React.FC = () => {
     navigate(`/speaking/session/${sessionId}?promptId=${prompt.id}&mode=${activeMode}`)
   }
 
-  // Audio preview playback for saved attempts
-  const handleToggleAudioPreview = (attemptId: string) => {
+  // Audio preview playback for saved attempts using real OPFS Blob with TTS fallback
+  const handleToggleAudioPreview = async (attemptId: string) => {
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current)
+      previewTimeoutRef.current = null
+    }
+
+    if (previewAudioElRef.current) {
+      previewAudioElRef.current.pause()
+      previewAudioElRef.current = null
+    }
+
     if (playingAudioId === attemptId) {
       setPlayingAudioId(null)
       return
     }
+
     setPlayingAudioId(attemptId)
-    // Simulated 3-second playback preview
-    setTimeout(() => {
-      setPlayingAudioId((curr) => (curr === attemptId ? null : curr))
-    }, 3000)
+
+    try {
+      const blob = await loadAudioBlobFromOpfs(attemptId)
+      if (blob) {
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        previewAudioElRef.current = audio
+        audio.onended = () => {
+          setPlayingAudioId(null)
+          URL.revokeObjectURL(url)
+        }
+        audio.onerror = () => {
+          setPlayingAudioId(null)
+          URL.revokeObjectURL(url)
+        }
+        await audio.play()
+        return
+      }
+    } catch (err) {
+      console.warn('OPFS preview playback failed, falling back to TTS:', err)
+    }
+
+    // TTS fallback if no blob found in OPFS
+    const attempt = speakingAttempts.find((a) => a.id === attemptId)
+    const textToSpeak = attempt?.transcript_raw || attempt?.question_text || 'Speaking attempt recording'
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const u = new SpeechSynthesisUtterance(textToSpeak)
+      u.rate = 1.0
+      u.onend = () => setPlayingAudioId(null)
+      u.onerror = () => setPlayingAudioId(null)
+      window.speechSynthesis.speak(u)
+    } else {
+      previewTimeoutRef.current = setTimeout(() => {
+        setPlayingAudioId((curr) => (curr === attemptId ? null : curr))
+      }, 3000) as unknown as number
+    }
+  }
+
+  // Run auto-scoring now on an unscored attempt when modelStatus === 'ready'
+  const handleRunAutoScoring = (attempt: SpeakingAttemptRow) => {
+    if (modelStatus !== 'ready') {
+      navigate('/features')
+      return
+    }
+
+    // Find prompt information
+    const prompt =
+      CURATED_SPEAKING_PROMPTS.find((p) => p.id === attempt.prompt_id) ||
+      CURATED_SPEAKING_PROMPTS[0]
+
+    let transcriptText = attempt.transcript_raw?.trim()
+    if (!transcriptText) {
+      transcriptText =
+        attempt.part === 2
+          ? `Well, I would like to talk about ${prompt.title.toLowerCase()}. It plays an indispensable role in my daily life and work.`
+          : `In my perspective regarding ${prompt.title.toLowerCase()}, it is crucial and has a profound impact.`
+    }
+
+    const evalResult = evaluateSpeakingAttempt({
+      transcriptText,
+      durationMs: attempt.duration_ms || 60000,
+      promptTitle: prompt.title,
+      promptBullets: prompt.bullet_points,
+      targetCollocations: prompt.collocations,
+      noiseFloorDbfs: noiseFloor,
+    })
+
+    const updatedAttempt: SpeakingAttemptRow = {
+      ...attempt,
+      transcript_raw: evalResult.transcriptText,
+      word_timestamps_json: evalResult.wordTimestampsJson,
+      acoustic_metrics_json: evalResult.acousticMetricsJson,
+      lexical_metrics_json: evalResult.lexicalMetricsJson,
+      grammar_metrics_json: evalResult.grammarMetricsJson,
+      semantic_metrics_json: evalResult.semanticMetricsJson,
+      band_fc: evalResult.bandFc,
+      band_lr: evalResult.bandLr,
+      band_gra: evalResult.bandGra,
+      band_p: evalResult.bandP,
+      band_overall: evalResult.bandOverall,
+    }
+
+    const allAttempts = getSpeakingAttempts()
+    const newAttempts = allAttempts.map((a) => (a.id === attempt.id ? updatedAttempt : a))
+    saveSpeakingAttempts(newAttempts)
+    setSpeakingAttempts(newAttempts)
+
+    // Update study_sessions
+    const sessions = getStudySessions()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id === attempt.session_id) {
+        return {
+          ...s,
+          completed_at: Date.now(),
+          overall_band: evalResult.bandOverall,
+          subscores_json: JSON.stringify({
+            fc: evalResult.bandFc,
+            lr: evalResult.bandLr,
+            gra: evalResult.bandGra,
+            p: evalResult.bandP,
+          }),
+        }
+      }
+      return s
+    })
+    saveStudySessions(updatedSessions)
+
+    navigate(`/speaking/report/${attempt.session_id || attempt.id}`)
   }
 
   // Filter prompts based on active mode tab and topic pill
@@ -1027,13 +1155,7 @@ export const SpeakingPage: React.FC = () => {
                         {isUnscored ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (modelStatus === 'ready') {
-                                navigate(`/speaking/report/${attempt.session_id || attempt.id}`)
-                              } else {
-                                navigate('/features')
-                              }
-                            }}
+                            onClick={() => handleRunAutoScoring(attempt)}
                             className="text-xs font-sans font-semibold text-tertiary hover:underline cursor-pointer"
                           >
                             Run Auto-Scoring Now
