@@ -21,7 +21,7 @@ A browser-native, **local-first** IELTS preparation web application covering **S
   - **Stage 2 (Psychometric Band Calibrator)**: Ordinal LightGBM / MLP Calibrator (`0.4 MB` ONNX) trained on $10,000+$ examiner-graded IELTS samples (Quadratic Weighted Kappa loss).
 - **Zero-Pain Multi-Point Model Downloader & Crash-Resilient OPFS Resume**:
   - **Unlimited Free Multi-CDN**: Primary **HuggingFace LFS Global CDN** + Secondary **Cloudflare R2 Custom Domain with `Cache Everything` Edge Rules** (unlimited free CDN cache hits, zero egress/request cost) + Tertiary **jsDelivr CDN**.
-  - **Multi-Point Range Connections + OPFS Sparse Flush**: Models are fetched across $4\text{--}6$ parallel HTTP Range streams in $4\text{ MiB}$ SHA-256-verified chunks written directly via `FileSystemSyncAccessHandle.write(chunk, { at: offset })` + `flush()`. If the user closes the browser tab or the device dies at $63\%$, reopening the page resumes immediately from chunk $12$ with zero lost bytes.
+  - **Multi-Point Range Connections + OPFS Sparse Flush**: Models are fetched across $4\text{--}6$ parallel HTTP Range streams in $4\text{ MiB}$ SHA-256-verified chunks written directly via `FileSystemSyncAccessHandle.write(chunk, { at: offset })` + `flush()`. If the user closes the browser tab or the device dies at 63%, reopening the page resumes immediately from chunk $12$ with zero lost bytes.
 - **Local-First Persistence**:
   - Powered by **SQLite-WASM over OPFS (`FileSystemSyncAccessHandle`)** inside a Dedicated Web Worker.
   - Works 100% offline with zero account required.

@@ -329,10 +329,10 @@ sequenceDiagram
 
 Let a model artifact $M$ have total byte length $L$ and be divided into $N = \lceil L / B \rceil$ fixed-size chunks of size $B = 4,194,304\text{ bytes}$ ($4\text{ MiB}$).
 
-1. **Byte Interval for Chunk $k \in \{0, 1, \dots, N-1\}$**:
+1. **Byte Interval for Chunk $k \in \lbrace 0, 1, \dots, N-1 \rbrace$**:
 
 $$
-\text{start}(k) = k \cdot B, \qquad \text{end}(k) = \min\big(L - 1, \; (k + 1) \cdot B - 1\big)
+\text{start}(k) = k \cdot B, \qquad \text{end}(k) = \min\big(L - 1, (k + 1) \cdot B - 1\big)
 $$
 
 2. **Per-Chunk Cryptographic Verification**:
@@ -365,7 +365,7 @@ where $\mathcal{V}$ is the set of already-verified chunk indices in SQLite.
 
 ## 6. IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)
 
-### 5.1 End-to-End Speaking Signal Flow (Mermaid)
+### 6.1 End-to-End Speaking Signal Flow (Mermaid)
 
 ```mermaid
 flowchart TD
@@ -378,20 +378,20 @@ flowchart TD
     WORKLET --> WHISPER["Whisper-base.en ONNX<br/>(Verbatim Prompt + DTW Word Timestamps)"]
 
     WHISPER --> TOKENS["Word Sequence W = {w_1, ..., w_N}<br/>with [s_i, e_i] & Posterior p(w_i)"]
-    TOKENS --> GOP["Wav2Vec2-CTC Forced Alignment<br/>Phoneme GOP & L1 Transfer Check"]
-    TOKENS --> HARPER["Harper WASM + Clause Parser<br/>Clauses C = {c_1, ..., c_K} & Grammar Errors"]
+    TOKENS --> GOP["Wav2Vec2-CTC + SpeechOcean762 GOPT<br/>Phoneme GOP & L1 Transfer Check"]
+    TOKENS --> HARPER["Harper WASM + Flan-T5-GEC / DeBERTa-GED<br/>Clauses C = {c_1, ..., c_K} & ERRANT Diffs"]
     TOKENS --> LEX["CEFR/AWL Lookup + Aho-Corasick Trie<br/>Bidirectional MTLD & Collocations"]
-    TOKENS --> BGE["BGE-Small-EN ONNX<br/>384-d Embedding u vs. Prompt Anchors v_m"]
+    TOKENS --> BGE["DeBERTa Cross-Encoder + BGE-Small ONNX<br/>Bullet Coverage & Anchor Similarity"]
 
     VAD & TOKENS & BGE --> FC["Criterion 1: Fluency & Coherence (B_FC)"]
     LEX & BGE --> LR["Criterion 2: Lexical Resource (B_LR)"]
     HARPER --> GRA["Criterion 3: Grammatical Range & Accuracy (B_GRA)"]
     PROSODY & GOP & TOKENS --> PRON["Criterion 4: Pronunciation (B_P)"]
 
-    FC & LR & GRA & PRON --> FINAL["Official IELTS Half-Band Aggregator<br/>B_overall in {0.0, 0.5, ..., 9.0}"]
+    FC & LR & GRA & PRON --> FINAL["Stage 2: Psychometric QWK Calibrator<br/>B_overall in {0.0, 0.5, ..., 9.0}"]
 ```
 
-### 5.2 Preserving Verbatim Disfluencies in Whisper
+### 6.2 Preserving Verbatim Disfluencies in Whisper
 
 Standard Whisper strips out `"um"`, `"uh"`, and false starts, which would artificially inflate a candidate's Fluency score. We condition Whisper's decoder with a **verbatim disfluency prefix prompt**:
 
@@ -401,21 +401,21 @@ const VERBATIM_INITIAL_PROMPT =
   "I- I think, the the thing is, let me see.";
 ```
 
-With `return_timestamps: "word"`, Whisper outputs a sequence of $N$ words $W = \{w_1, w_2, \dots, w_N\}$, where each word $w_i$ has start time $s_i$, end time $e_i$, and acoustic token probability $p(w_i) \in (0, 1]$.
+With `return_timestamps: "word"`, Whisper outputs a sequence of $N$ words $W = \lbrace w_1, w_2, \dots, w_N \rbrace$, where each word $w_i$ has start time $s_i$, end time $e_i$, and acoustic token probability $p(w_i) \in (0, 1]$.
 
 ---
 
-### 5.3 Criterion 1: Fluency and Coherence ($B_{\text{FC}}$)
+### 6.3 Criterion 1: Fluency and Coherence (FC)
 
 Let $T_{\text{total}}$ be total response duration in seconds, and let $T_{\text{speech}}$ be total phonation time where Silero VAD probability $p_{\text{VAD}}(t) > 0.5$.
 
-#### 1. Speech Rate ($\text{WPM}$) and Articulation Rate ($\text{AR}$)
+#### 1. Speech Rate (WPM) and Articulation Rate (AR)
 
 $$
 \text{WPM} = \frac{60 \cdot N}{T_{\text{total}}}, \qquad \text{AR} = \frac{\sum_{i=1}^{N} \text{syllables}(w_i)}{T_{\text{speech}}}
 $$
 
-#### 2. Phonation-Time Ratio ($\text{PTR}$)
+#### 2. Phonation-Time Ratio (PTR)
 
 $$
 \text{PTR} = \frac{T_{\text{speech}}}{T_{\text{total}}} \in [0, 1]
@@ -428,38 +428,38 @@ For every inter-word gap $\Delta t_i = s_{i+1} - e_i$:
 - **Mid-Clause Hesitation Pause ($P_{\text{mid}}$)**: $\Delta t_i \ge 0.40\text{ s}$ occurring **inside** a syntactic phrase (e.g., between determiner and noun `"the [0.6s] government"`). Counted per $100$ words:
 
 $$
-R_{P_{\text{mid}}} = \frac{100}{N} \cdot \left| \left\{ i : \Delta t_i \ge 0.40 \land \neg\text{isClauseBoundary}(i) \right\} \right|
+R_{P_{\text{mid}}} = \frac{100}{N} \cdot \left\lvert \left\lbrace i : \Delta t_i \ge 0.40 \land \neg\text{isClauseBoundary}(i) \right\rbrace \right\rvert
 $$
 
 - **Long Freeze Pause Rate ($R_{P_{\text{long}}}$)**: Pauses where $\Delta t_i \ge 1.20\text{ s}$ per $100$ words:
 
 $$
-R_{P_{\text{long}}} = \frac{100}{N} \cdot \left| \left\{ i : \Delta t_i \ge 1.20 \right\} \right|
+R_{P_{\text{long}}} = \frac{100}{N} \cdot \left\lvert \left\lbrace i : \Delta t_i \ge 1.20 \right\rbrace \right\rvert
 $$
 
-#### 4. Mean Length of Run ($\text{MLR}$)
+#### 4. Mean Length of Run (MLR)
 Average number of words spoken continuously between any pauses $\Delta t_i \ge 0.30\text{ s}$:
 
 $$
-\text{MLR} = \frac{N}{1 + \left| \left\{ i : \Delta t_i \ge 0.30 \right\} \right|}
+\text{MLR} = \frac{N}{1 + \left\lvert \left\lbrace i : \Delta t_i \ge 0.30 \right\rbrace \right\rvert}
 $$
 
-#### 5. Disfluency Rate ($\text{DFR}$)
+#### 5. Disfluency Rate (DFR)
 
 $$
-\text{DFR} = \frac{100}{N} \left( N_{\text{fillers}} + N_{\text{repeats}} + N_{\text{false\_starts}} \right)
+\text{DFR} = \frac{100}{N} \left( N_{\text{fillers}} + N_{\text{repeats}} + N_{\text{false-starts}} \right)
 $$
 
-#### 6. Semantic Topic Relevance Gate ($\tau_{\text{topic}}$)
-Let $\mathbf{u} \in \mathbb{R}^{384}$ be the `bge-small-en-v1.5` embedding of the candidate's transcript and $\{\mathbf{v}_1, \dots, \mathbf{v}_M\}$ be the pre-computed semantic anchor vectors for the prompt:
+#### 6. Semantic Topic Relevance Gate
+Let $\mathbf{u} \in \mathbb{R}^{384}$ be the `bge-small-en-v1.5` embedding of the candidate's transcript and $\lbrace \mathbf{v}_1, \dots, \mathbf{v}_M \rbrace$ be the pre-computed semantic anchor vectors for the prompt:
 
 $$
-\tau_{\text{topic}} = \max_{m \in \{1,\dots,M\}} \frac{\mathbf{u} \cdot \mathbf{v}_m}{\|\mathbf{u}\|_2 \, \|\mathbf{v}_m\|_2}
+\tau_{\text{topic}} = \max_{m \in \lbrace 1,\dots,M \rbrace} \frac{\mathbf{u} \cdot \mathbf{v}_m}{\lVert \mathbf{u} \rVert_2 \lVert \mathbf{v}_m \rVert_2}
 $$
 
 If $\tau_{\text{topic}} < 0.45$, an off-topic penalty $\Delta_{\text{topic}} = -1.5$ is applied (preventing candidates from reciting a memorized speech unrelated to the question).
 
-#### 7. Combined Fluency & Coherence Score ($\hat{B}_{\text{FC}}$)
+#### 7. Combined Fluency & Coherence Score
 
 $$
 \hat{B}_{\text{FC}} = \text{clamp}_{[1, 9]}\left( 9.0 - \frac{\alpha_1 \max(0, 130 - \text{WPM}) + \alpha_2 R_{P_{\text{mid}}} + \alpha_3 R_{P_{\text{long}}} + \alpha_4 \text{DFR} + \alpha_5 \max(0, 8.0 - \text{MLR})}{1 + 0.15 S_{\text{cohesion}}} + \Delta_{\text{topic}} \right)
@@ -467,7 +467,7 @@ $$
 
 ---
 
-### 5.4 Criterion 2: Lexical Resource ($B_{\text{LR}}$)
+### 6.4 Criterion 2: Lexical Resource (LR)
 
 #### 1. Bidirectional MTLD (Measure of Textual Lexical Diversity)
 Unlike raw Type-Token Ratio ($\text{TTR} = \frac{V}{N}$), which unfairly penalizes longer Part 2 speeches, $\text{MTLD}$ counts the average number of words required for running $\text{TTR}$ to drop to threshold $\theta = 0.72$ in both forward and backward passes:
@@ -476,55 +476,55 @@ $$
 \text{MTLD} = \frac{\text{MTLD}_{\text{forward}}(\theta) + \text{MTLD}_{\text{backward}}(\theta)}{2}
 $$
 
-#### 2. CEFR & Academic Word List Sophistication Index ($S_{\text{CEFR}}$)
+#### 2. CEFR & Academic Word List Sophistication Index
 For all lemmatized content words $N_{\text{content}}$ matched against the local `cefr_lexicon` table:
 
 $$
 S_{\text{CEFR}} = \frac{1.0 N_{\text{B1}} + 2.0 N_{\text{B2}} + 3.5 N_{\text{C1}} + 5.0 N_{\text{C2}}}{N_{\text{content}}}, \qquad R_{\text{adv}} = \frac{N_{\text{B2}} + N_{\text{C1}} + N_{\text{C2}} + N_{\text{AWL}}}{N_{\text{content}}}
 $$
 
-#### 3. Idiomatic & Collocation Density ($S_{\text{colloc}}$)
+#### 3. Idiomatic & Collocation Density
 Let $N_{\text{colloc}}$ be the number of distinct multi-word collocations and phrasal verbs matched by the Aho-Corasick automaton (including prompt-specific `target_collocations`), and $N_{\text{cliche}}$ be memorized template cliches:
 
 $$
-S_{\text{colloc}} = \min\left( 1.0, \; \frac{N_{\text{colloc}} + 0.2 N_{\text{cliche}}}{4.0} \right)
+S_{\text{colloc}} = \min\left( 1.0, \frac{N_{\text{colloc}} + 0.2 N_{\text{cliche}}}{4.0} \right)
 $$
 
-#### 4. Prompt Paraphrasing Score ($S_{\text{para}}$)
+#### 4. Prompt Paraphrasing Score
 Given prompt content lemmas $L_Q$ and the candidate's opening response lemmas $L_A$:
 
 $$
-S_{\text{para}} = \tau_{\text{topic}} \cdot \left( 1 - \frac{|L_Q \cap L_A|}{|L_Q \cup L_A|} \right)
+S_{\text{para}} = \tau_{\text{topic}} \cdot \left( 1 - \frac{\lvert L_Q \cap L_A \rvert}{\lvert L_Q \cup L_A \rvert} \right)
 $$
 
 High semantic similarity ($\tau_{\text{topic}}$) paired with low verbatim word copying yields a high paraphrasing score.
 
 ---
 
-### 5.5 Criterion 3: Grammatical Range and Accuracy ($B_{\text{GRA}}$)
+### 6.5 Criterion 3: Grammatical Range and Accuracy (GRA)
 
-#### 1. Error-Free Clause Ratio ($\text{EFC}$)
-The transcript is split into $K$ clauses $C = \{c_1, c_2, \dots, c_K\}$. Using `harper.js` (WASM) and morphosyntactic agreement rules (subject-verb agreement, tense consistency, article usage, preposition subcategorization):
+#### 1. Error-Free Clause Ratio (EFC)
+The transcript is split into $K$ clauses $C = \lbrace c_1, c_2, \dots, c_K \rbrace$. Using `harper.js` (WASM) and the `Flan-T5-small-GEC / DeBERTa-GED` grammar engine (checking subject-verb agreement, tense consistency, article usage, and preposition subcategorization):
 
 $$
-\text{EFC} = \frac{\left| \left\{ c_k \in C : \text{errorCount}(c_k) = 0 \right\} \right|}{K}
+\text{EFC} = \frac{\left\lvert \left\lbrace c_k \in C : \text{errorCount}(c_k) = 0 \right\rbrace \right\rvert}{K}
 $$
 
-#### 2. Weighted Error Density ($\text{WED}$)
-Errors are classified by severity weight $\omega_e \in \{0.5\text{ (minor slip)}, 1.0\text{ (local error)}, 2.0\text{ (communication-impeding)}\}$:
+#### 2. Weighted Error Density (WED)
+Errors are classified by severity weight $\omega_e \in \lbrace 0.5, 1.0, 2.0 \rbrace$ (corresponding to $0.5$ for minor slips, $1.0$ for local grammatical errors, and $2.0$ for communication-impeding errors):
 
 $$
 \text{WED} = \frac{\sum_{e \in E} \omega_e}{K}
 $$
 
-#### 3. Syntactic Complexity & Range Index ($S_{\text{range}}$)
-Let $K_{\text{sub}}$ be the number of subordinate/dependent clauses and $F_{\text{used}} \in \{0, \dots, 10\}$ be the count of distinct complex grammatical families detected (relative clauses, conditionals, passive voice, perfect continuous, modals of deduction, cleft sentences, participial phrases, comparatives, subjunctive, negative inversion):
+#### 3. Syntactic Complexity & Range Index
+Let $K_{\text{sub}}$ be the number of subordinate/dependent clauses and $F_{\text{used}} \in \lbrace 0, \dots, 10 \rbrace$ be the count of distinct complex grammatical families detected (relative clauses, conditionals, passive voice, perfect continuous, modals of deduction, cleft sentences, participial phrases, comparatives, subjunctive, negative inversion):
 
 $$
 \text{SCR} = \frac{K_{\text{sub}}}{K}, \qquad S_{\text{range}} = 0.6 \cdot \min\left(1.0, \frac{F_{\text{used}}}{5.0}\right) + 0.4 \cdot \min\left(1.0, \frac{\text{SCR}}{0.40}\right)
 $$
 
-#### 4. Combined GRA Score ($\hat{B}_{\text{GRA}}$)
+#### 4. Combined GRA Score
 
 $$
 \hat{B}_{\text{GRA}} = \text{clamp}_{[1, 9]}\left( 3.0 + 4.2 \cdot \text{EFC} + 2.2 \cdot S_{\text{range}} - 1.5 \cdot \text{WED} \right)
@@ -532,16 +532,16 @@ $$
 
 ---
 
-### 5.6 Criterion 4: Pronunciation ($B_{\text{P}}$)
+### 6.6 Criterion 4: Pronunciation (P)
 
-#### 1. ASR Acoustic Confidence & Low-Confidence Word Ratio ($\text{LCWR}$)
+#### 1. ASR Acoustic Confidence & Low-Confidence Word Ratio (LCWR)
 
 $$
-\bar{P}_{\text{ASR}} = \frac{1}{N} \sum_{i=1}^{N} p(w_i), \qquad \text{LCWR} = \frac{\left| \left\{ w_i : p(w_i) < 0.65 \right\} \right|}{N}
+\bar{P}_{\text{ASR}} = \frac{1}{N} \sum_{i=1}^{N} p(w_i), \qquad \text{LCWR} = \frac{\left\lvert \left\lbrace w_i : p(w_i) < 0.65 \right\rbrace \right\rvert}{N}
 $$
 
-#### 2. Phoneme Goodness of Pronunciation ($\text{GOP}$) & Indonesian L1 Transfer
-For each target phoneme $\phi$ spanning audio frames $t \in [t_1, t_2]$ with duration $T_\phi = t_2 - t_1 + 1$, Wav2Vec2-CTC yields frame posterior $P(\phi \mid x_t)$:
+#### 2. Phoneme Goodness of Pronunciation (GOP) & Indonesian L1 Transfer
+For each target phoneme $\phi$ spanning audio frames $t \in [t_1, t_2]$ with duration $T_\phi = t_2 - t_1 + 1$, Wav2Vec2-CTC + GOPT yields frame posterior $P(\phi \mid x_t)$:
 
 $$
 \text{GOP}(\phi) = \frac{1}{T_\phi} \sum_{t=t_1}^{t_2} \log \left( \frac{P(\phi \mid x_t)}{\max_{\psi \in \Phi} P(\psi \mid x_t)} \right) \le 0
@@ -553,7 +553,7 @@ The analyzer specifically flags common Indonesian L1 phonological substitutions:
 - Palato-alveolar sibilant: $/ \int / \to / \text{s} /$ (*she* $\to$ *see*)
 - Final cluster reduction & missing inflectional codas (`-ed` $/ \text{t}, \text{d}, \text{Id} /$ and `-s` $/ \text{s}, \text{z}, \text{Iz} /$)
 
-#### 3. Gender-Invariant Pitch Variation in Semitones ($\sigma_{F_0,\text{ST}}$)
+#### 3. Gender-Invariant Pitch Variation in Semitones
 Using the pYIN pitch detector over voiced frames, raw frequency $F_0(t)$ (Hz) is normalized against the speaker's median frequency $F_{0,\text{med}}$:
 
 $$
@@ -563,11 +563,11 @@ $$
 - Flat/monotone delivery: $\sigma_{F_0,\text{ST}} < 1.8\text{ ST}$ (penalized).
 - Natural expressive English prosody: $2.5 \le \sigma_{F_0,\text{ST}} \le 4.8\text{ ST}$.
 
-#### 4. Stress-Timed Rhythm via Normalized Pairwise Variability Index ($\text{nPVI}$)
-Given $m$ consecutive vocalic syllable nucleus durations $\{d_1, d_2, \dots, d_m\}$:
+#### 4. Stress-Timed Rhythm via Normalized Pairwise Variability Index (nPVI)
+Given $m$ consecutive vocalic syllable nucleus durations $\lbrace d_1, d_2, \dots, d_m \rbrace$:
 
 $$
-\text{nPVI} = \frac{100}{m - 1} \sum_{k=1}^{m-1} \left| \frac{d_k - d_{k+1}}{\frac{d_k + d_{k+1}}{2}} \right|
+\text{nPVI} = \frac{100}{m - 1} \sum_{k=1}^{m-1} \left\lvert \frac{d_k - d_{k+1}}{(d_k + d_{k+1}) / 2} \right\rvert
 $$
 
 - Syllable-timed rhythm (flat syllable lengths): $\text{nPVI} < 42$.
@@ -575,9 +575,9 @@ $$
 
 ---
 
-### 5.7 Official IELTS Half-Band Rounding Formula
+### 6.7 Official IELTS Half-Band Rounding Formula
 
-Each criterion score $B_c$ ($c \in \{\text{FC}, \text{LR}, \text{GRA}, \text{P}\}$) and the overall Speaking band $B_{\text{Speaking}}$ are rounded to the nearest $0.5$ band using the official IELTS rounding rule:
+Each criterion score $B_c$ ($c \in \lbrace \text{FC}, \text{LR}, \text{GRA}, \text{P} \rbrace$) and the overall Speaking band $B_{\text{Speaking}}$ are rounded to the nearest $0.5$ band using the official IELTS rounding rule:
 
 $$
 B_c = \frac{\lfloor 2 \hat{B}_c + 0.5 \rfloor}{2}, \qquad \bar{B} = \frac{B_{\text{FC}} + B_{\text{LR}} + B_{\text{GRA}} + B_{\text{P}}}{4}, \qquad B_{\text{Speaking}} = \frac{\lfloor 2 \bar{B} + 0.5 \rfloor}{2}
@@ -949,16 +949,16 @@ flowchart TD
 ```
 
 ### 9.2 Mathematical Guarantee of CRDT / HLC Smart Merge
-Let $S_{\text{local}}$ and $S_{\text{import}}$ be two database states (e.g., from a user's laptop and phone). Every mutable row $x$ identified by primary key $k$ carries a strictly totally ordered Hybrid Logical Clock timestamp $\text{hlc}(x)$. The merged state $S_{\text{merged}}$ for key $k$ is defined as a **Last-Write-Wins Element-Set (LWW-Element-Set) join-semilattice**:
+Let $S_{\text{local}}$ and $S_{\text{import}}$ be two database states (e.g., from a user's laptop and phone). Every mutable row $x$ identified by primary key $k$ carries a strictly totally ordered Hybrid Logical Clock timestamp $\text{hlc}(x)$. The merged state $S_{\text{merged}}(k)$ for key $k$ is defined as a **Last-Write-Wins Element-Set (LWW-Element-Set) join-semilattice**:
 
 $$
-S_{\text{merged}}(k) = \begin{cases}
-S_{\text{local}}(k) & \text{if } k \notin S_{\text{import}} \\
-S_{\text{import}}(k) & \text{if } k \notin S_{\text{local}} \\
-S_{\text{import}}(k) & \text{if } \text{hlc}\big(S_{\text{import}}(k)\big) > \text{hlc}\big(S_{\text{local}}(k)\big) \\
-S_{\text{local}}(k) & \text{otherwise}
-\end{cases}
+S_{\text{merged}}(k) = S_{\text{local}}(k) \sqcup S_{\text{import}}(k) = \arg\max_{r \in \lbrace S_{\text{local}}(k), S_{\text{import}}(k) \rbrace} \text{hlc}(r)
 $$
+
+Specifically, for every primary key $k$:
+- If $k \notin S_{\text{import}}$, keep $S_{\text{local}}(k)$.
+- If $k \notin S_{\text{local}}$, insert $S_{\text{import}}(k)$.
+- If $k \in S_{\text{local}} \cap S_{\text{import}}$ and $\text{hlc}\big(S_{\text{import}}(k)\big) > \text{hlc}\big(S_{\text{local}}(k)\big)$, overwrite with $S_{\text{import}}(k)$; otherwise keep $S_{\text{local}}(k)$.
 
 Because this join operation $\sqcup$ is **commutative** ($A \sqcup B = B \sqcup A$), **associative** ($(A \sqcup B) \sqcup C = A \sqcup (B \sqcup C)$), and **idempotent** ($A \sqcup A = A$), importing the same backup file multiple times or merging across 3+ devices is mathematically guaranteed never to duplicate or lose progress.
 
