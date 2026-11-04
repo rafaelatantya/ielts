@@ -8,6 +8,7 @@ import { SpeakingPage } from './pages/SpeakingPage'
 import { SpeakingSimulatorPage } from './pages/SpeakingSimulatorPage'
 import { SpeakingReportPage } from './pages/SpeakingReportPage'
 import { WritingPage } from './pages/WritingPage'
+import { WritingReportPage } from './pages/WritingReportPage'
 import { ReadingPage } from './pages/ReadingPage'
 import { ListeningPage } from './pages/ListeningPage'
 import { ReviewPage } from './pages/ReviewPage'
@@ -36,6 +37,7 @@ export const AppContent: React.FC = () => {
           <Route path="/speaking/session/:sessionId" element={<SpeakingSimulatorPage />} />
           <Route path="/speaking/report/:attemptId" element={<SpeakingReportPage />} />
           <Route path="/writing" element={<WritingPage />} />
+          <Route path="/writing/report/:attemptId" element={<WritingReportPage />} />
           <Route path="/reading" element={<ReadingPage />} />
           <Route path="/listening" element={<ListeningPage />} />
           <Route path="/review" element={<ReviewPage />} />
