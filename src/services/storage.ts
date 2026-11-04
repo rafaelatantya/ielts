@@ -1,7 +1,21 @@
-import { LocalMeta, StorageStatus, IeltsBackupPayload } from '../types'
+import {
+  LocalMeta,
+  StorageStatus,
+  IeltsBackupPayload,
+  StudySessionRow,
+  SpeakingAttemptRow,
+  WritingAttemptRow,
+  ReceptiveAttemptRow,
+  SrsCardRow,
+} from '../types'
 
 const LOCAL_META_KEY = 'oxford_ielts_local_meta'
 const OPFS_LOCK_KEY = 'oxford_ielts_opfs_locked'
+const STUDY_SESSIONS_KEY = 'oxford_ielts_study_sessions'
+const SPEAKING_ATTEMPTS_KEY = 'oxford_ielts_speaking_attempts'
+const WRITING_ATTEMPTS_KEY = 'oxford_ielts_writing_attempts'
+const RECEPTIVE_ATTEMPTS_KEY = 'oxford_ielts_receptive_attempts'
+const SRS_CARDS_KEY = 'oxford_ielts_srs_cards'
 
 const DEFAULT_META: LocalMeta = {
   onboarding_completed: false,
@@ -38,6 +52,138 @@ export function saveLocalMeta(updates: Partial<LocalMeta>): LocalMeta {
     console.error('Failed to save local_meta', err)
     return { ...DEFAULT_META, ...updates }
   }
+}
+
+export function getStudySessions(): StudySessionRow[] {
+  try {
+    const raw = localStorage.getItem(STUDY_SESSIONS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveStudySessions(sessions: StudySessionRow[]): void {
+  try {
+    localStorage.setItem(STUDY_SESSIONS_KEY, JSON.stringify(sessions))
+  } catch (err) {
+    console.error('Failed to save study_sessions', err)
+  }
+}
+
+export function getSpeakingAttempts(): SpeakingAttemptRow[] {
+  try {
+    const raw = localStorage.getItem(SPEAKING_ATTEMPTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveSpeakingAttempts(attempts: SpeakingAttemptRow[]): void {
+  try {
+    localStorage.setItem(SPEAKING_ATTEMPTS_KEY, JSON.stringify(attempts))
+  } catch (err) {
+    console.error('Failed to save speaking_attempts', err)
+  }
+}
+
+export function getWritingAttempts(): WritingAttemptRow[] {
+  try {
+    const raw = localStorage.getItem(WRITING_ATTEMPTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveWritingAttempts(attempts: WritingAttemptRow[]): void {
+  try {
+    localStorage.setItem(WRITING_ATTEMPTS_KEY, JSON.stringify(attempts))
+  } catch (err) {
+    console.error('Failed to save writing_attempts', err)
+  }
+}
+
+export function getReceptiveAttempts(): ReceptiveAttemptRow[] {
+  try {
+    const raw = localStorage.getItem(RECEPTIVE_ATTEMPTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveReceptiveAttempts(attempts: ReceptiveAttemptRow[]): void {
+  try {
+    localStorage.setItem(RECEPTIVE_ATTEMPTS_KEY, JSON.stringify(attempts))
+  } catch (err) {
+    console.error('Failed to save receptive_attempts', err)
+  }
+}
+
+export function getSrsCards(): SrsCardRow[] {
+  try {
+    const raw = localStorage.getItem(SRS_CARDS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveSrsCards(cards: SrsCardRow[]): void {
+  try {
+    localStorage.setItem(SRS_CARDS_KEY, JSON.stringify(cards))
+  } catch (err) {
+    console.error('Failed to save srs_cards', err)
+  }
+}
+
+export async function exportIeltsBackup(): Promise<IeltsBackupPayload> {
+  const sessions = getStudySessions()
+  const speaking = getSpeakingAttempts()
+  const writing = getWritingAttempts()
+  const receptive = getReceptiveAttempts()
+  const srs = getSrsCards()
+
+  const updatedMeta = saveLocalMeta({ last_export_at: Date.now() })
+
+  const backupData: IeltsBackupPayload = {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    device_id: 'oxford_local_studio',
+    local_meta: updatedMeta,
+    study_sessions: sessions,
+    speaking_attempts: speaking,
+    writing_attempts: writing,
+    receptive_attempts: receptive,
+    srs_cards: srs,
+    fsrs_cards: srs,
+  }
+
+  const jsonString = JSON.stringify(backupData, null, 2)
+  const blob = new Blob([jsonString], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const dateStr = new Date().toISOString().slice(0, 10)
+  a.href = url
+  a.download = `oxford-atelier-${dateStr}.ieltsbackup`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  return backupData
 }
 
 export async function getStorageEstimate(): Promise<StorageStatus> {
