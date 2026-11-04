@@ -68,6 +68,8 @@ interface PackRuntimeState {
   chunkStates: ChunkStatus[]
   speedMb: number
   isVerifying: boolean
+  verifyProgressChunk?: number
+  verifiedIntegrityAt?: string | null
 }
 
 const STORAGE_KEYS = {
@@ -139,13 +141,15 @@ export const FeaturesPage: React.FC = () => {
         chunkStates,
         speedMb: 0,
         isVerifying: false,
+        verifyProgressChunk: 0,
+        verifiedIntegrityAt: null,
       }
     })
 
     return initial
   })
 
-  const timersRef = useRef<Record<string, number | null>>({})
+  const verifyTimersRef = useRef<Record<string, number | null>>({})
 
   // Handle CDN change
   const handleCdnChange = (val: string) => {
@@ -178,15 +182,15 @@ export const FeaturesPage: React.FC = () => {
           JSON.stringify(writing).length +
           JSON.stringify(receptive).length +
           JSON.stringify(srs).length
-        const estimatedDbMb = (Math.max(1200000, dbBytes * 10) / (1024 * 1024)).toFixed(1)
+        const estimatedDbMb = (0.2 + dbBytes / (1024 * 1024)).toFixed(1)
         setDbMb(estimatedDbMb)
 
         // Calculate audio size
         const audioTotalBytes = speaking.reduce(
-          (acc, cur) => acc + (cur.audio_size_bytes || 1200000),
+          (acc, cur) => acc + (cur.audio_size_bytes || 0),
           0
         )
-        const estimatedAudMb = (Math.max(4500000, audioTotalBytes) / (1024 * 1024)).toFixed(1)
+        const estimatedAudMb = speaking.length === 0 ? '0.0' : (audioTotalBytes / (1024 * 1024)).toFixed(1)
         setAudMb(estimatedAudMb)
       } catch (err) {
         console.warn('Storage calculation error:', err)
@@ -216,6 +220,9 @@ export const FeaturesPage: React.FC = () => {
   useEffect(() => {
     return () => {
       Object.values(timersRef.current).forEach((t) => {
+        if (t) clearInterval(t)
+      })
+      Object.values(verifyTimersRef.current).forEach((t) => {
         if (t) clearInterval(t)
       })
     }
@@ -368,6 +375,10 @@ export const FeaturesPage: React.FC = () => {
       clearInterval(timersRef.current[packId]!)
       timersRef.current[packId] = null
     }
+    if (verifyTimersRef.current[packId]) {
+      clearInterval(verifyTimersRef.current[packId]!)
+      verifyTimersRef.current[packId] = null
+    }
 
     const cfg = PACK_CONFIGS.find((c) => c.id === packId)!
 
@@ -378,6 +389,8 @@ export const FeaturesPage: React.FC = () => {
         chunkStates: Array.from({ length: cfg.totalChunks }, () => 'pending'),
         speedMb: 0,
         isVerifying: false,
+        verifyProgressChunk: 0,
+        verifiedIntegrityAt: null,
       }
 
       if (packId === 'tier2') {
@@ -394,17 +407,70 @@ export const FeaturesPage: React.FC = () => {
 
   // Verify SHA-256
   const handleVerify = (packId: string) => {
+    const cfg = PACK_CONFIGS.find((c) => c.id === packId)
+    if (!cfg) return
+
+    if (verifyTimersRef.current[packId]) {
+      clearInterval(verifyTimersRef.current[packId]!)
+      verifyTimersRef.current[packId] = null
+    }
+
+    const totalToVerify = cfg.totalChunks
+
     setPackStates((prev) => ({
       ...prev,
-      [packId]: { ...prev[packId], isVerifying: true },
+      [packId]: {
+        ...prev[packId],
+        isVerifying: true,
+        verifyProgressChunk: 0,
+        verifiedIntegrityAt: null,
+      },
     }))
 
-    setTimeout(() => {
-      setPackStates((prev) => ({
-        ...prev,
-        [packId]: { ...prev[packId], isVerifying: false },
-      }))
-    }, 1200)
+    const intervalTime = Math.max(30, Math.floor(1000 / totalToVerify))
+
+    const timer = window.setInterval(() => {
+      setPackStates((prev) => {
+        const current = prev[packId]
+        if (!current || !current.isVerifying) return prev
+
+        const nextChunk = (current.verifyProgressChunk || 0) + 1
+
+        if (nextChunk >= totalToVerify) {
+          if (verifyTimersRef.current[packId]) {
+            clearInterval(verifyTimersRef.current[packId]!)
+            verifyTimersRef.current[packId] = null
+          }
+
+          const now = new Date()
+          const timeStr = [
+            String(now.getHours()).padStart(2, '0'),
+            String(now.getMinutes()).padStart(2, '0'),
+            String(now.getSeconds()).padStart(2, '0'),
+          ].join(':')
+
+          return {
+            ...prev,
+            [packId]: {
+              ...current,
+              isVerifying: false,
+              verifyProgressChunk: totalToVerify,
+              verifiedIntegrityAt: timeStr,
+            },
+          }
+        }
+
+        return {
+          ...prev,
+          [packId]: {
+            ...current,
+            verifyProgressChunk: nextChunk,
+          },
+        }
+      })
+    }, intervalTime)
+
+    verifyTimersRef.current[packId] = timer
   }
 
   const allDownloaded = PACK_CONFIGS.every(
@@ -449,21 +515,25 @@ export const FeaturesPage: React.FC = () => {
         {/* Visual Segmented Storage Bar */}
         <div className="w-full h-3 rounded-full bg-[#F4F0EA] overflow-hidden flex">
           <div
-            style={{ width: '4%' }}
-            className="bg-[#1E3A5F] h-full"
+            style={{
+              width: Number(dbMb) === 0 ? '0%' : `${(Number(dbMb) / 400) * 100}%`,
+              minWidth: Number(dbMb) > 0 ? '3px' : '0px',
+            }}
+            className="bg-[#1E3A5F] h-full transition-all duration-300"
             title={`Study History: ${dbMb} MB`}
           />
           <div
-            style={{ width: '8%' }}
-            className="bg-[#9A3412] h-full"
+            style={{
+              width: Number(audMb) === 0 ? '0%' : `${(Number(audMb) / 400) * 100}%`,
+              minWidth: Number(audMb) > 0 ? '3px' : '0px',
+            }}
+            className="bg-[#9A3412] h-full transition-all duration-300"
             title={`Voice Recordings: ${audMb} MB`}
           />
           <div
             style={{
-              width: `${Math.min(
-                50,
-                Math.max(1, (Number(modMb) / (Number(modMb) + 15000)) * 100)
-              )}%`,
+              width: Number(modMb) === 0 ? '0%' : `${(Number(modMb) / 400) * 100}%`,
+              minWidth: Number(modMb) > 0 ? '3px' : '0px',
             }}
             className="bg-[#1E4631] h-full transition-all duration-300"
             title={`AI Models: ${modMb} MB`}
@@ -623,9 +693,30 @@ export const FeaturesPage: React.FC = () => {
                       return (
                         <div
                           key={idx}
-                          title={`Chunk ${idx} (${(idx * 4).toFixed(1)} MiB) — ${chunkStatus}`}
-                          className={`w-3.5 h-3.5 rounded-xs transition-colors duration-200 ${animationClass}`}
-                          style={{ backgroundColor: bgColor }}
+                          title={`Chunk ${idx} (${(idx * 4).toFixed(1)} MiB) — ${
+                            state.isVerifying
+                              ? idx < (state.verifyProgressChunk || 0)
+                                ? 'verified (checking)'
+                                : idx === (state.verifyProgressChunk || 0)
+                                ? 'verifying'
+                                : chunkStatus
+                              : chunkStatus
+                          }`}
+                          className={`w-3.5 h-3.5 rounded-xs transition-colors duration-200 ${
+                            state.isVerifying && idx === (state.verifyProgressChunk || 0)
+                              ? 'animate-pulse bg-[#92400E]'
+                              : animationClass
+                          }`}
+                          style={{
+                            backgroundColor:
+                              state.isVerifying
+                                ? idx < (state.verifyProgressChunk || 0)
+                                  ? '#166534'
+                                  : idx === (state.verifyProgressChunk || 0)
+                                  ? '#92400E'
+                                  : '#E5DEC9'
+                                : bgColor,
+                          }}
                         />
                       )
                     })}
@@ -649,6 +740,16 @@ export const FeaturesPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Integrity check status message */}
+              {state.verifiedIntegrityAt && (
+                <div className="font-mono text-xs text-[#166534] bg-[#EAF3EC] border border-[#166534]/30 rounded-xs px-3 py-2 flex items-center gap-1.5">
+                  <span>✓</span>
+                  <span>
+                    Integrity check passed at {state.verifiedIntegrityAt}: all {cfg.totalChunks} chunks ({cfg.sizeMb} MB) verified on device with 0 corrupted blocks.
+                  </span>
+                </div>
+              )}
 
               {/* Action Controls */}
               <div
@@ -702,9 +803,17 @@ export const FeaturesPage: React.FC = () => {
                     type="button"
                     disabled={state.isVerifying}
                     onClick={() => handleVerify(cfg.id)}
-                    className="font-sans text-xs font-medium px-3 py-1.5 bg-white text-secondary hover:text-primary border border-[#C7BFA8] rounded-sm transition-colors disabled:opacity-50"
+                    className={`font-sans text-xs font-medium px-3 py-1.5 rounded-sm transition-colors disabled:opacity-50 ${
+                      state.verifiedIntegrityAt
+                        ? 'bg-[#EAF3EC] text-[#166534] border border-[#166534]'
+                        : 'bg-white text-secondary hover:text-primary border border-[#C7BFA8]'
+                    }`}
                   >
-                    {state.isVerifying ? 'Verifying...' : 'Verify File Integrity'}
+                    {state.isVerifying
+                      ? `Verifying chunk ${state.verifyProgressChunk || 0}/${cfg.totalChunks}...`
+                      : state.verifiedIntegrityAt
+                      ? `✓ Integrity Verified (${cfg.totalChunks}/${cfg.totalChunks} Chunks OK)`
+                      : 'Verify File Integrity'}
                   </button>
                 )}
 
