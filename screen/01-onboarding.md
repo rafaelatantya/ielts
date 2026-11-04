@@ -13,7 +13,10 @@ Welcome the user without requiring registration or downloading any AI models upf
 
 ## 2. Mandatory UI Elements Checklist
 
-### 2.1 Editorial Welcome Header
+### 2.1 Editorial Welcome Header & Claude-Style Gooseneck Lamp Scribble Animation
+- [ ] **Hero Animated SVG Illustration (`GooseneckLampScribble` — `viewBox="0 0 1000 640"`, height `200px`, `#E2D9CA` Oatmeal Well)**:
+  - Hand-drawn felt-tip (`#181512`, `stroke-width: 14px–17px`, `#claude-ink-wobble` displacement filter) gooseneck desk lamp on the left shining a diagonal polygon cone of warm chalky light (`#FAF7F1`) across a rectangular manuscript page on the right.
+  - Inside the light beam's `<clipPath id="light-reveal-clip">`, three rows of looping cursive `"u/w"` text scribbles are dynamically revealed as the lamp switches on (`stroke-dashoffset` draw-in over `600ms` followed by a gentle `-28deg <-> -36deg` beam sweep and `9 fps` stepped line boil).
 - [ ] **Serif Title (`h1` — `Source Serif 4`, `34px`, `#1C1917`)**: *"Your Private, Local-First IELTS Study Studio."*
 - [ ] **Subtitle (`body-md` — `Plus Jakarta Sans`, `#57534E`)**: Explains that 100% of study sessions, recordings, and band diagnostics run locally in the browser on OPFS disk—with zero mandatory login and zero background data drain.
 - [ ] **3 Trust Pills (`#F4F0EA` background, `#1C1917` text)**:

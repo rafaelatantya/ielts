@@ -8,7 +8,10 @@ colors:
   tertiary: "#9A3412"
   neutral: "#FBF9F5"
   surface-elevated: "#F4F0EA"
+  surface-oatmeal: "#E2D9CA"
+  surface-beam: "#FAF7F1"
   surface-card: "#FFFFFF"
+  ink-scribble: "#181512"
   border-subtle: "#E5DEC9"
   border-strong: "#C7BFA8"
   accent-forest: "#1E4631"
@@ -157,6 +160,16 @@ components:
   border-focus:
     backgroundColor: "{colors.border-strong}"
     textColor: "{colors.primary}"
+  illustration-well:
+    backgroundColor: "{colors.surface-oatmeal}"
+    textColor: "{colors.ink-scribble}"
+    rounded: "{rounded.md}"
+    padding: 24px
+  illustration-beam:
+    backgroundColor: "{colors.surface-beam}"
+    textColor: "{colors.ink-scribble}"
+    rounded: "{rounded.sm}"
+    padding: 16px
 ---
 
 ## Overview
@@ -288,9 +301,89 @@ We avoid heavy dark drop shadows. Depth is communicated through **3 tactile pape
   - Diff table of `Study Sessions`, `Speaking Attempts`, `Writing Essays`, and `FSRS Cards`.
   - Double-confirmation gate: requires checking an acknowledgment box (or typing `OVERWRITE` + offering a 1-click `.ieltsbackup` safety download if overwriting newer data).
 
-### 5. Motion & Micro-Interaction Contract
+### 5. Claude-Style Hand-Drawn Editorial Scribble & SVG Animation System (`EditorialScribble`)
+
+All illustrations, empty states, active audio indicators, and scoring transitions use the **"Editorial Warm-Tech Scribble"** aesthetic (inspired by Anthropic / Claude's hand-drawn vector animations):
+
+#### A. Visual Archetype & 3-Color Rule
+- **Tactile Medium Emulation**: Felt-tip marker or technical brush pen (`1.0mm–1.5mm` nib) drawn on heavyweight warm oatmeal cotton paper.
+- **Strict 3-Tone Illustration Palette**:
+  1. **Oatmeal Parchment Well (`colors.surface-oatmeal` `#E2D9CA`)**: Flat, warm sand background for illustration frames and unlit object interiors.
+  2. **Espresso Felt-Tip Ink (`colors.ink-scribble` `#181512`)**: All primary outlines, stems, and cursive loop scribbles. Never use pure `#000000`.
+  3. **Chalky Ivory Illumination (`colors.surface-beam` `#FAF7F1`)**: Unstroked polygonal light beams, lens interiors, and highlighted paper zones (optionally accented with a single Oxford Terracotta `#9A3412` stroke).
+- **Zero Digital Bloat**: Zero gradients, zero drop shadows, zero 3D perspective meshes, and zero grain textures inside illustrations.
+
+#### B. Felt-Tip Stroke Physics & Organic SVG Wobble Filter
+- Never render raw, mathematically rigid `<rect>` or `<line>` primitives.
+- **Normalized Line Weights** (on a `1000 x 640` `viewBox`):
+  - Primary structural outlines (lamp base, shade, page border): `13px–15px`
+  - Heavy structural spine (gooseneck stem): `16px–18px`
+  - Interior cursive wave scribbles (connected `"u"` / `"w"` garland loops): `12px–14px`
+  - Always set `stroke-linecap="round"` and `stroke-linejoin="round"`.
+- **Reusable SVG Turbulence & Displacement Filter (`#claude-ink-wobble`)**:
+  ```xml
+  <filter id="claude-ink-wobble" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence
+      type="fractalNoise"
+      baseFrequency="0.025"
+      numOctaves="3"
+      seed="4"
+      result="noise"
+    />
+    <feDisplacementMap
+      in="SourceGraphic"
+      in2="noise"
+      scale="3.2"
+      xChannelSelector="R"
+      yChannelSelector="G"
+    />
+  </filter>
+  ```
+
+#### C. Clip-Path Light-Beam Reveal Architecture (The Desk Lamp Metaphor)
+- As seen in the signature gooseneck desk lamp illustration, hidden details (such as cursive handwritten lines, corrected grammar spans, or phonetic IPA waves) are placed inside an SVG `<g clip-path="url(#light-reveal-clip)">` bound to the exact polygon of the `#FAF7F1` light cone:
+  ```xml
+  <svg viewBox="0 0 1000 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <polygon id="light-cone-geometry" points="408,280 560,194 798,505 488,505" />
+      <clipPath id="light-reveal-clip">
+        <use href="#light-cone-geometry" />
+      </clipPath>
+    </defs>
+    <!-- Layer 0: Oatmeal Canvas -->
+    <rect width="1000" height="640" fill="#E2D9CA" />
+    <!-- Layer 1: Warm Ivory Light Beam -->
+    <use href="#light-cone-geometry" fill="#FAF7F1" />
+    <!-- Layer 2: Cursive Scribbles (Visible ONLY inside the Light Beam!) -->
+    <g clip-path="url(#light-reveal-clip)" filter="url(#claude-ink-wobble)">
+      <path d="M 635 312 c 10 -28, 22 -28, 32 0 c 10 -28, 22 -28, 32 0 ..." stroke="#181512" stroke-width="13" stroke-linecap="round" />
+      <path d="M 635 390 c 10 -28, 22 -28, 32 0 c 10 -28, 22 -28, 32 0 ..." stroke="#181512" stroke-width="13" stroke-linecap="round" />
+      <path d="M 635 468 c 10 -28, 22 -28, 32 0 c 10 -28, 22 -28, 32 0 ..." stroke="#181512" stroke-width="13" stroke-linecap="round" />
+    </g>
+    <!-- Layer 3: Unclipped Document Border & Gooseneck Lamp on Top -->
+    <path d="M 608 250 L 784 250 L 782 505 L 606 505 Z" stroke="#181512" stroke-width="14" stroke-linejoin="round" filter="url(#claude-ink-wobble)" />
+  </svg>
+  ```
+
+#### D. 3-Phase Scribble Animation Choreography
+1. **Phase 1 — Self-Drawing Ink Entrance (`0.0s – 0.65s`)**:
+   - Paths animate `stroke-dashoffset` from `pathLength` to `0` using `cubic-bezier(0.22, 1, 0.36, 1)` so the illustration looks freshly sketched on the page.
+2. **Phase 2 — Illumination Sweep & Clip Reveal (`0.65s – 1.2s`)**:
+   - The lamp shade pivots gently (`-26deg <-> -36deg` around the neck joint) while the `#light-cone-geometry` vertices sweep across the document baseline (`Y = 505`), dynamically wiping the clipped cursive text scribbles in and out.
+3. **Phase 3 — 9 FPS Stepped "Line Boil" (`steps(1)`, Active/Hover Only)**:
+   - During active states (e.g., while recording speech, while WASM models are scoring an attempt, or on card hover), a lightweight timer cycles the `<feTurbulence seed>` across `1 -> 2 -> 3` every `110ms` (`~9 fps` cel-animation boil). When idle, the boil pauses at `0 CPU%`.
+
+#### E. Canonical Scribble Illustrations Across the 11 Screens
+1. **Onboarding (`/onboarding`)**: *The Gooseneck Desk Lamp & Illuminated Manuscript* — lamp switches on and sweeps its `#FAF7F1` beam across the page to reveal cursive script.
+2. **Speaking Lab & Simulator (`/speaking`)**: *The Vintage Condenser Mic & Cursive Soundwave Garland* — continuous looping cursive `"u/w"` waves radiate from a hand-drawn studio mic, boiling at `9 fps` in proportion to live microphone `dBFS`.
+3. **Diagnostic Scoring Transition (`/speaking/report/:id` & `/writing`)**: *The Archival Loupe / Magnifying Glass* — sweeps across a page of messy squiggles; inside the circular `#FAF7F1` lens `clipPath`, the squiggles align into crisp calligraphy.
+4. **FSRS Review Deck (`/review`)**: *The Index Card Stack & Fountain Pen Flourish* — tactile hand-drawn cards that flip with a continuous ink flourish when a review session completes.
+5. **AI Model Manager (`/features`)**: *The Archival Bookcase* — hand-drawn monograph volumes sliding into place as $4\text{ MiB}$ OPFS chunks verify.
+6. **Account & Cloud Sync (`/account`)**: *Two Notebooks Linked by a Looping Ink Thread* — visually depicts `This Device` $\leftrightarrow$ `Cloud Snapshot` during manual push/pull.
+
+### 6. General UI Motion & Micro-Interaction Contract
 - **Easing & Duration**: Use calm, physical easing (`cubic-bezier(0.22, 1, 0.36, 1)`), `150ms–220ms` for hover/focus transitions, and `250ms` for modal/drawer entrances.
-- **No Bouncy / Flashy Animations**: Never use spring-bounceovers, neon pulse glows, or particle confetti.
+- **No Bouncy / Flashy Animations**: Never use spring-bounceovers, neon pulse glows, or particle confetti. All artistic motion uses the **Claude-Style Hand-Drawn Scribble** system above.
 - **Audio Waveform & VU Meter**: Driven at `60fps` via `<canvas>` and `requestAnimationFrame` reading from `AnalyserNode` without triggering React state re-renders.
 
 ---
