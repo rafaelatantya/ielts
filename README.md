@@ -2,7 +2,9 @@
 
 A browser-native, **local-first** IELTS preparation web application covering **Speaking, Writing, Reading, and Listening** with **100% client-side WASM/ONNX auto-scoring**, a **pre-generated curated Question Bank**, deterministic offline backup/restore, and optional zero-cost multi-device sync via **Google OAuth + Cloudflare Edge (Pages, Workers, D1, R2)**.
 
-📄 **[Read the Full System Design & Ultra Megaplan (`megaplan.md`)](./megaplan.md)**
+📄 **[Read the Full System Design & Ultra Megaplan (`megaplan.md`)](./megaplan.md)**  
+🎨 **[Read the Design System Specification (`DESIGN.md` — Oxford Atelier)](./DESIGN.md)**  
+🖥️ **[Browse All 11 UI Screen Specifications (`screen/00-index.md`)](./screen/00-index.md)**
 
 ---
 
