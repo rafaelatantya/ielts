@@ -1,475 +1,633 @@
 # IELTS Local-First AI Study Platform — Ultra System Design & Megaplan
 
-> **Project**: `rafaelatantya/ielts`  
-> **Architecture Paradigm**: Local-First Web Application (PWA) + Client-Side WebAssembly/WebGPU AI + Optional Zero-Cost Edge Sync  
-> **Target Hosting & Backend**: Cloudflare Pages + Cloudflare Workers + Cloudflare D1 + Cloudflare R2 (100% Free Tier)  
-> **Auth Provider**: Google OAuth 2.0 / OpenID Connect (PKCE + FedCM)  
-> **Offline Capability**: 100% functional without account or internet connection (after initial model/asset cache)
+> **Repository**: `rafaelatantya/ielts`  
+> **Architecture Paradigm**: Local-First Web Application (PWA) + 100% Deterministic & Specialized ONNX/WASM Scoring + Pre-Generated Curated Question Bank + Optional Zero-Cost Edge Sync  
+> **Hosting & Cloud Sync**: Cloudflare Pages + Cloudflare Workers + Cloudflare D1 + Cloudflare R2 (100% Free Tier, USD 0/month)  
+> **Authentication**: Google OAuth 2.0 / OpenID Connect (PKCE)  
+> **Offline Capability**: 100% functional without login or internet connection
 
 ---
 
 ## Table of Contents
 
 1. [Executive Summary & Core Architectural Tenets](#1-executive-summary--core-architectural-tenets)
-2. [End-to-End System Architecture](#2-end-to-end-system-architecture)
-3. [Complete Technology Stack & Runtime Requirements](#3-complete-technology-stack--runtime-requirements)
-4. [IELTS Speaking Auto-Scoring Engine (WASM + WebGPU Deep Dive)](#4-ielts-speaking-auto-scoring-engine-wasm--webgpu-deep-dive)
-5. [Writing, Reading, Listening & FSRS Study Modules](#5-writing-reading-listening--fsrs-study-modules)
-6. [Local-First Storage Architecture & SQLite-WASM Schema](#6-local-first-storage-architecture--sqlite-wasm-schema)
-7. [Deterministic Export & Import System (Backup / Restore / Merge)](#7-deterministic-export--import-system-backup--restore--merge)
-8. [Google OAuth 2.0 & Multi-Device Sync Protocol (Cloudflare Edge)](#8-google-oauth-20--multi-device-sync-protocol-cloudflare-edge)
-9. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#9-cloudflare-free-tier-capacity-math--cost-guardrails)
-10. [Security, Privacy & Cross-Origin Isolation](#10-security-privacy--cross-origin-isolation)
-11. [Repository Structure & Monorepo Layout](#11-repository-structure--monorepo-layout)
-12. [Phased Implementation Roadmap & TDD Verification Plan](#12-phased-implementation-roadmap--tdd-verification-plan)
+2. [End-to-End System Architecture (Mermaid)](#2-end-to-end-system-architecture-mermaid)
+3. [Why Zero On-Device Generative LLM? The Pre-Generated Question Bank Architecture](#3-why-zero-on-device-generative-llm-the-pre-generated-question-bank-architecture)
+4. [Complete Technology Stack & Specialized WASM/ONNX Models](#4-complete-technology-stack--specialized-wasmonnx-models)
+5. [IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)](#5-ielts-speaking-auto-scoring-engine-mathematical--dsp-formulation)
+6. [Writing, Reading, Listening & FSRS v5 Study Modules](#6-writing-reading-listening--fsrs-v5-study-modules)
+7. [Local-First Storage Architecture & ER Schema (Mermaid + SQL)](#7-local-first-storage-architecture--er-schema-mermaid--sql)
+8. [Deterministic Export & Import System (Backup / Restore / CRDT Merge)](#8-deterministic-export--import-system-backup--restore--crdt-merge)
+9. [Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)](#9-google-oauth-20--multi-device-hlc-sync-protocol-mermaid)
+10. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#10-cloudflare-free-tier-capacity-math--cost-guardrails)
+11. [Security, Privacy & Cross-Origin Isolation](#11-security-privacy--cross-origin-isolation)
+12. [Monorepo Structure & Phased Implementation Roadmap](#12-monorepo-structure--phased-implementation-roadmap)
 
 ---
 
 ## 1. Executive Summary & Core Architectural Tenets
 
-Most IELTS preparation platforms fail in one of two ways: either they are static question banks without speaking/writing evaluation, or they rely on expensive cloud GPU inference APIs (OpenAI Realtime/Whisper/GPT-4o) that force high subscription fees and break offline.
+### 1.1 Core Tenets
 
-This system solves that tradeoff by moving **the entire database, audio DSP pipeline, speech recognition, prosodic analysis, grammar engine, and LLM rubric evaluator into the user's browser** via **WebAssembly (WASM)**, **WebGPU**, and the **Origin Private File System (OPFS)**.
-
-### Core Architectural Tenets
-
-1. **Local-First by Default (Zero-Server Dependency)**
-   - A user can open the website, never log in, turn off Wi-Fi, take full Speaking, Writing, Reading, and Listening mock tests, get instant Band 0.0–9.0 diagnostic scores, and review flashcards for months.
-   - All relational data lives locally in **SQLite-WASM** backed by **OPFS (`FileSystemSyncAccessHandle`)**.
-2. **100% Client-Side AI Auto-Scoring**
-   - **Speaking**: Audio is captured via `AudioWorklet`, segmented with **Silero VAD (ONNX WASM)**, analyzed for pitch/rhythm via **Rust/C++ DSP WASM**, transcribed with word-level timestamps and token probabilities via **Whisper ONNX (WebGPU / WASM SIMD)**, checked for phoneme accuracy via **Wav2Vec2 CTC**, and evaluated on coherence/lexical/grammar via a hybrid **Deterministic NLP + WebLLM (`Qwen2.5-1.5B-Instruct` q4f16)** pipeline.
-   - **Examiner Voice**: Spoken prompts for Speaking Parts 1–3 are synthesized locally via **Kokoro-82M ONNX** or **Piper TTS WASM**.
-3. **Sovereign Data Ownership (Export / Import)**
-   - Users own their database. Single-click export produces either a lightweight `.ieltsbackup` JSON/CRDT bundle or a full `.ielts-archive.zip` containing the raw SQLite `.db` file and compressed `.opus` audio recordings.
-   - Imports support **CRDT Smart Merge** (non-destructive union of progress) or **Full Snapshot Restore**.
-4. **Optional Google Login + Multi-Device Sync on $0 Infrastructure**
-   - Logging in with Google activates a background **Delta Sync Worker**.
-   - Local changes are tracked via **Hybrid Logical Clocks (HLC)** in an outbox table and synced to **Cloudflare D1** (relational state) and **Cloudflare R2** (content-addressed Opus audio blobs).
-   - Because all heavy compute happens on the client and the server only handles tiny JSON diffs, Cloudflare's Free Tier (100k Worker requests/day, 5 GB D1, 10 GB R2) easily supports **10,000+ Daily Active Users at $0.00/month**.
-
----
-
-## 2. End-to-End System Architecture
-
-### 2.1 High-Level Topology
-
-```
-+===================================================================================================+
-|                                  USER BROWSER (CLIENT-SIDE PWA)                                   |
-|  Cross-Origin Isolated: COOP: same-origin | COEP: credentialless (Unlocks SharedArrayBuffer)      |
-+---------------------------------------------------------------------------------------------------+
-|                                                                                                   |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | MAIN THREAD (UI Layer — React 19 + Vite + TanStack Router + Tailwind v4 + Zustand)          |  |
-|  | - Speaking Mock Room (Part 1/2/3 Timer, Waveform Canvas, Live Transcript, Diagnostic Radar) |  |
-|  | - Writing Split-Editor | Reading 3-Pane Annotator | Listening Audio Sync | FSRS Deck UI     |  |
-|  +----------+------------------------+-------------------------+-----------------------+-------+  |
-|             | Comlink RPC            | AudioWorklet / Port     | Comlink RPC           |          |
-|             v                        v                         v                       v          |
-|  +--------------------+  +-----------------------+  +-----------------------+  +---------------+  |
-|  |   db.worker.ts     |  |  audio-dsp.worker.ts  |  |  ai-scorer.worker.ts  |  | sync.worker.ts|  |
-|  |                    |  |                       |  |                       |  |               |  |
-|  | - SQLite-WASM      |  | - 16kHz PCM Resampler |  | - Whisper-base.en     |  | - HLC Clock   |  |
-|  | - OPFS SAHPool VFS |  | - Silero VAD v5 (WASM)|  |   (ONNX WebGPU/WASM)  |  | - Outbox Queue|  |
-|  | - FSRS v5 Engine   |  | - YIN Pitch (F0) &    |  | - Wav2Vec2 Phoneme GOP|  | - Delta Pull/ |  |
-|  | - CRDT Merge Logic |  |   nPVI Rhythm WASM    |  | - harper.js Grammar   |  |   Push Batcher|  |
-|  | - ZIP Export/Import|  | - Opus WebM Encoder   |  | - CEFR/AWL Trie       |  | - R2 Blob Sync|  |
-|  +---------+----------+  +-----------+-----------+  | - WebLLM Qwen2.5-1.5B |  +-------+-------+  |
-|            |                         |              | - Kokoro/Piper TTS    |          |          |
-|            v                         v              +-----------+-----------+          |          |
-|  +--------------------------------------------------------------+                      |          |
-|  |              LOCAL PERSISTENCE LAYER (BROWSER)               |                      |          |
-|  | 1. OPFS (/db/ielts.sqlite3, /audio/*.opus, /exports/*.zip)   |                      |          |
-|  | 2. Cache API / IndexedDB (Quantized ONNX & MLC Model Shards) |                      |          |
-|  | 3. localStorage (Theme, Device ID, Last Synced HLC Watermark)|                      |          |
-|  +--------------------------------------------------------------+                      |          |
-+========================================================================================|==========+
-                                                                                         |
-                                             HTTPS (Optional — Only when Logged In & Online)
-                                             1. Google OAuth 2.0 / OIDC PKCE
-                                             2. Batched HLC Delta Sync (JSON + gzip)
-                                             3. Content-Addressed Audio Upload (SHA-256)
-                                                                                         |
-                                                                                         v
-+===================================================================================================+
-|                              CLOUDFLARE EDGE INFRASTRUCTURE ($0 FREE TIER)                        |
-+---------------------------------------------------------------------------------------------------+
-|                                                                                                   |
-|  +----------------------------+     +----------------------------------------------------------+  |
-|  |     Cloudflare Pages       |     |            Cloudflare Workers (Hono API)                 |  |
-|  | - Static SPA Bundle        |     | - GET/POST /api/auth/google/* (JWT + JWKS Verification)  |  |
-|  | - Static Question Packs    |     | - POST     /api/sync/push     (Idempotent HLC Upsert)    |  |
-|  | - COOP/COEP Edge Headers   |     | - GET      /api/sync/pull     (Cursor Delta Query)       |  |
-|  +----------------------------+     | - PUT/GET  /api/audio/:sha256 (Signed R2 Stream)         |  |
-|                                     +---------------+------------------------------+-----------+  |
-|                                                     |                              |              |
-|                                                     v                              v              |
-|                                     +-------------------------------+  +-----------------------+  |
-|                                     |     Cloudflare D1 (SQLite)    |  |     Cloudflare R2     |  |
-|                                     | - users                       |  | - /audio/{uid}/{hash} |  |
-|                                     | - sync_oplog (HLC indexed)    |  |   .opus (Quota-capped |  |
-|                                     | - user_snapshots              |  |   at 25MB/user)       |  |
-|                                     +-------------------------------+  +-----------------------+  |
-+===================================================================================================+
-```
-
-### 2.2 Multi-Worker Concurrency Model
-
-Why isolate work into 4 dedicated Web Workers?
-- **Zero UI Jank**: Running Whisper transcription or SQLite disk writes on the main thread freezes React animations and audio recording buffers.
-- **Synchronous OPFS Access**: `FileSystemSyncAccessHandle` (which makes SQLite-WASM 10x faster than IndexedDB) is **only available inside Dedicated Web Workers**.
-- **Memory Management**: AI models (Whisper + WebLLM) consume 300 MB – 1.2 GB of ArrayBuffer/WebGPU memory. Isolating `ai-scorer.worker.ts` allows terminating or unloading heavy model pipelines immediately after a Speaking session completes without leaking memory in the main tab.
+1. **Local-First by Default (Zero Server Dependency)**
+   - Users can open the web app, never create an account, disconnect from Wi-Fi, complete full Speaking, Writing, Reading, and Listening tests, receive instant Band $0.0\text{--}9.0$ diagnostic breakdowns, and review spaced-repetition flashcards.
+   - All user state is persisted in **SQLite-WASM** backed by the browser's **Origin Private File System (OPFS)** via `FileSystemSyncAccessHandle`.
+2. **Pre-Generated Curated Question Bank (Zero On-Device Generative LLM)**
+   - Small on-device generative LLMs ($1\text{B--}3\text{B}$ parameters such as Qwen-1.5B or Llama-1B) produce low-quality, unnatural IELTS questions, hallucinate grammar explanations, and require $800\text{ MB--}1.5\text{ GB}$ of VRAM.
+   - Instead, **all questions, cue cards, Part 3 follow-up trees, reading passages, listening scripts, and Band 7.0/8.0/9.0 model answers are pre-generated and curated offline** in a structured Question Bank (`prompts`).
+   - Each question in the bank ships with **pre-computed semantic anchor embeddings**, **topic-specific C1/C2 collocation targets**, and **ground-truth rubric checklists**.
+3. **100% Client-Side Acoustic, Phonetic & NLP Auto-Scoring (WASM + ONNX)**
+   - Rather than a bloated generative LLM, the browser runs **small, surgical, specialized WASM/ONNX encoders** ($\approx 135\text{ MB}$ total cached once):
+     - **Silero VAD v5 (`1.8 MB`)**: Frame-exact speech vs. pause segmentation ($30\text{ ms}$ frames).
+     - **Rust/WASM DSP (`< 500 KB`)**: Fundamental frequency ($F_0$) pitch contour in semitones and stress-timed rhythm ($\text{nPVI}$).
+     - **Whisper ONNX (`whisper-base.en`, `~74 MB`)**: Verbatim speech-to-text with disfluency preservation, word-level timestamps, and acoustic confidence posteriors.
+     - **Wav2Vec2-CTC Phoneme Aligner (`~32 MB`)**: Phoneme-level Goodness of Pronunciation ($\text{GOP}$) and Indonesian L1 phonological interference detection.
+     - **Harper WASM (`harper.js`, `~3.2 MB`) + Clause Parser**: Deterministic sub-$50\text{ ms}$ grammatical error detection and syntactic complexity analysis.
+     - **BGE-Small Embedding Encoder (`bge-small-en-v1.5` int8 ONNX, `~22 MB`)**: Computes cosine similarity between the user's response and the question's pre-computed semantic anchors in $< 15\text{ ms}$ to verify topic relevance and detect memorized off-topic scripts.
+4. **Sovereign Data Ownership (Export & Import)**
+   - Users can export their entire progress at any time as a compact `.ieltsbackup` (`JSON.gz`) or a full `.ielts-archive.zip` (containing the SQLite database and `.opus` voice recordings) and import it on any device with **CRDT/HLC Smart Merge**.
+5. **Optional Google Login & Multi-Device Sync on Cloudflare Free Tier (USD 0/month)**
+   - Logging in with Google activates background **Hybrid Logical Clock (HLC) Delta Sync** to **Cloudflare D1** (relational rows) and **Cloudflare R2** (content-addressed `.opus` recordings).
 
 ---
 
-## 3. Complete Technology Stack & Runtime Requirements
+## 2. End-to-End System Architecture (Mermaid)
 
-| Layer | Technology | Exact Package / Engine | Purpose |
-| :--- | :--- | :--- | :--- |
-| **UI Framework** | React 19 + TypeScript 5.8 | `react`, `vite`, `@tanstack/react-router` | Type-safe SPA routing, instant view transitions |
-| **Styling & UI** | Tailwind CSS v4 + Shadcn | `tailwindcss`, `radix-ui`, `lucide-react` | Exam-authentic interfaces + accessible diagnostics |
-| **State & IPC** | Zustand + Comlink | `zustand`, `comlink` | Typed proxy RPC between Main Thread and Workers |
-| **Local Database** | SQLite-WASM (Official) | `@sqlite.org/sqlite-wasm` | Full relational SQL + FTS5 search over OPFS |
-| **Audio Capture** | Web Audio API + Worklet | Native `AudioWorkletProcessor` + `MediaRecorder` | Simultaneous 16kHz PCM float stream + Opus file encode |
-| **Voice Activity (VAD)** | Silero VAD v5 | `onnxruntime-web` (`silero_vad.onnx`, 1.8 MB) | Frame-exact speech vs silence detection (30ms frames) |
-| **Prosody & Pitch DSP** | Rust -> WASM DSP module | Custom `wasm-bindgen` crate (`pitch-detection`, `rustfft`) | $F_0$ contour (pYIN), RMS energy, nPVI rhythm, HNR |
-| **Speech-to-Text (ASR)** | Whisper ONNX (Transformers.js) | `@huggingface/transformers` (`whisper-base.en` q8/q4) | Verbatim transcription + word timestamps + token logprobs |
-| **Phoneme Alignment** | Wav2Vec2 CTC ONNX | `Xenova/wav2vec2-lv-60-espeak-cv-ft` (quantized q8) | Phoneme Goodness of Pronunciation (GOP) scoring |
-| **Examiner TTS** | Kokoro-82M / Piper WASM | `kokoro-js` or `@diffusionstudio/vits-web` | Natural offline British/Australian/US examiner voices |
-| **Fast Grammar NLP** | Harper WASM + Compromise | `harper.js` (WASM) + custom dependency heuristics | Sub-50ms offline grammar, spelling, & clause segmentation |
-| **On-Device LLM** | WebLLM (MLC-LLM WebGPU) | `@mlc-ai/web-llm` (`Qwen2.5-1.5B-Instruct-q4f16_1-MLC`) | Semantic coherence, Part 3 dynamic follow-ups, Band-9 rewrites |
-| **Spaced Repetition** | FSRS v5 | `ts-fsrs` | State-of-the-art memory scheduling for vocabulary & errors |
-| **Archive / Backup** | fflate (Streaming ZIP) | `fflate` | Zero-dependency fast ZIP/GZIP compression in Web Worker |
-| **Edge API** | Cloudflare Workers + Hono | `hono`, `jose` | Lightweight edge routing, Google OIDC verification, D1/R2 |
-| **Cloud Storage** | Cloudflare D1 + R2 | Serverless SQLite + S3-compatible Object Store | Free-tier cloud sync for metadata & Opus recordings |
+```mermaid
+flowchart TB
+    subgraph Browser["USER BROWSER (Client-Side PWA — COOP: same-origin-allow-popups | COEP: credentialless)"]
+        direction TB
+        UI["Main Thread: React 19 + Vite + TanStack Router + Tailwind v4<br/>Speaking Simulator | Writing Split-Editor | Reading Annotator | Listening Player | FSRS Deck"]
 
-### 3.1 Tiered Hardware Adaptation Strategy (Graceful Degradation)
+        subgraph Workers["Dedicated Web Workers & AudioWorklet (Zero Main-Thread Blocking)"]
+            direction LR
+            DBW["db.worker.ts<br/>- SQLite-WASM (OPFS)<br/>- FSRS v5 Scheduler<br/>- HLC Stamp & CRDT Merge<br/>- fflate ZIP Export/Import"]
+            DSPW["audio-dsp.worker.ts<br/>- 16kHz PCM Ring Buffer<br/>- Silero VAD v5 (ONNX)<br/>- pYIN Pitch (F0) & nPVI<br/>- MediaRecorder Opus"]
+            AIW["ai-scorer.worker.ts<br/>- Whisper-base.en ONNX<br/>- Wav2Vec2 Phoneme GOP<br/>- harper.js WASM Grammar<br/>- BGE-Small Semantic Vector<br/>- Kokoro/Piper TTS"]
+            SYNCW["sync.worker.ts<br/>- HLC Outbox Consumer<br/>- Delta Push / Pull Batcher<br/>- SHA-256 R2 Audio Uploader"]
+        end
 
-Not every user has an M-series MacBook or dedicated RTX GPU. During onboarding (or first visit to the Speaking Lab), a **Hardware Capability Probe** checks `navigator.gpu` (WebGPU), `navigator.deviceMemory`, and `navigator.hardwareConcurrency`:
+        subgraph LocalStore["Browser Local Storage Layer"]
+            direction LR
+            OPFS[("OPFS Disk<br/>/db/ielts.sqlite3<br/>/audio/attempts/*.opus")]
+            CACHE[("Cache API / IndexedDB<br/>Quantized ONNX Models<br/>& Static Question Packs")]
+            LSTOR[("localStorage<br/>device_id, theme,<br/>last_sync_hlc")]
+        end
 
-| Tier | Device Profile | ASR & Pronunciation | Grammar & Rubric Evaluation | Download Footprint |
+        UI <-->|"Comlink RPC"| DBW
+        UI <-->|"MessagePort / PCM"| DSPW
+        UI <-->|"Comlink RPC"| AIW
+        UI <-->|"Comlink RPC"| SYNCW
+
+        DBW <--> OPFS
+        DSPW --> OPFS
+        AIW <--> CACHE
+        SYNCW <--> DBW
+        SYNCW <--> LSTOR
+    end
+
+    subgraph Cloudflare["CLOUDFLARE EDGE INFRASTRUCTURE (100% Free Tier — Optional Sync)"]
+        direction TB
+        CFP["Cloudflare Pages<br/>Static SPA + Pre-Generated Question Packs"]
+        CFW["Cloudflare Workers (Hono API)<br/>- /api/auth/google/* (OIDC + PKCE)<br/>- /api/sync/push & /api/sync/pull<br/>- /api/audio/:sha256"]
+        CFD1[("Cloudflare D1 (SQLite)<br/>users + sync_entities<br/>(Indexed by user_id, hlc)")]
+        CFR2[("Cloudflare R2 Object Store<br/>/audio/{uid}/{sha256}.opus<br/>(25 MB/user Ring Buffer)")]
+
+        CFW <--> CFD1
+        CFW <--> CFR2
+    end
+
+    Google["Google OAuth 2.0 / OIDC<br/>accounts.google.com"]
+
+    CFP -.->|"Initial Static Load"| UI
+    SYNCW <-->|"HTTPS JSON Delta + Opus Blobs"| CFW
+    UI <-->|"OAuth 2.0 PKCE Redirect"| CFW
+    CFW <-->|"Token Exchange & JWKS"| Google
+```
+
+---
+
+## 3. Why Zero On-Device Generative LLM? The Pre-Generated Question Bank Architecture
+
+Using an on-device generative LLM (such as Qwen-1.5B or Llama-1B) to generate IELTS questions or grade open-ended answers on the fly is an **anti-pattern** because:
+1. **Low Prompt Quality**: Small LLMs drift from official Cambridge IELTS phrasing, invent invalid Reading `True/False/Not Given` logic, and ask repetitive Part 3 questions.
+2. **Grading Hallucinations**: Small LLMs hallucinate grammar rules and produce non-deterministic band scores across runs.
+3. **Massive Resource Bloat**: Downloading $800\text{ MB+}$ of weights and allocating $1.5\text{ GB}$ of WebGPU VRAM crashes mobile browsers and low-RAM laptops.
+
+### 3.1 The Pre-Generated Static Question Bank + Semantic Anchor Solution
+
+Because our question bank is **pre-generated and curated offline**, every prompt already carries its exact assessment targets before it reaches the user's browser:
+
+```mermaid
+flowchart LR
+    subgraph Offline["OFFLINE CONTENT PIPELINE (Build Time)"]
+        RAW["Curated Cambridge-Style Prompts<br/>(Speaking P1/P2/P3, Writing T1/T2,<br/>Reading Passages, Listening Scripts)"]
+        META["Pre-Computed Assessment Metadata:<br/>1. 384-d Semantic Anchor Vectors (BGE-Small)<br/>2. Topic C1/C2 Collocation Set<br/>3. Task 1 Chart Ground-Truth JSON<br/>4. Band 7.0 / 8.0 / 9.0 Model Answers<br/>5. Examiner Opus Audio / TTS Phonemes"]
+        PACK["Compressed Static Packs<br/>/public/data/questions/*.json.gz"]
+        RAW --> META --> PACK
+    end
+
+    subgraph Runtime["CLIENT BROWSER RUNTIME (Zero Generative LLM)"]
+        SQL[("SQLite-WASM<br/>prompts Table")]
+        USER["User's Spoken / Written Response"]
+        EMB["BGE-Small-EN-v1.5 ONNX (22 MB)<br/>Computes User Vector u in 12ms"]
+        COS["Cosine Similarity Check<br/>Sim(u, v_anchor) + Keyword/Trend Match"]
+        RUBRIC["Deterministic 4-Criterion Scorer<br/>(DSP + Whisper + Wav2Vec2 + Harper + CEFR)"]
+
+        PACK -->|"Seeded on Boot"| SQL
+        SQL --> COS
+        USER --> EMB --> COS --> RUBRIC
+        USER --> RUBRIC
+    end
+```
+
+### 3.2 What Each Pre-Generated Prompt Pack Contains
+
+```json
+{
+  "id": "spk_p2_tech_042",
+  "module": "speaking",
+  "part": 2,
+  "topic": "Technology & Daily Life",
+  "cue_card": {
+    "prompt": "Describe a piece of technology (not a phone) that you find particularly useful.",
+    "bullets": [
+      "What the technology is and when you got it",
+      "How often and for what purpose you use it",
+      "How it compares to older ways of doing the same task",
+      "And explain why you find it so useful in your daily life"
+    ]
+  },
+  "part3_followup_tree": [
+    {
+      "id": "spk_p3_tech_042_q1",
+      "question": "Why do some older people find it challenging to adopt new household technologies?",
+      "semantic_anchors_b64": "...",
+      "target_collocations": [
+        "steep learning curve",
+        "digital literacy",
+        "user-friendly interface",
+        "technological obsolescence"
+      ],
+      "model_answer_band85": "Primarily, I'd say it comes down to a steep learning curve combined with interfaces that aren't always designed with accessibility in mind..."
+    }
+  ],
+  "semantic_anchors_b64": "<Base64 Float32Array of 4 x 384-dim BGE-small vectors for the 4 cue-card bullets>",
+  "target_collocations": [
+    "time-saving device",
+    "boost productivity",
+    "seamlessly integrate",
+    "indispensable tool"
+  ]
+}
+```
+
+---
+
+## 4. Complete Technology Stack & Specialized WASM/ONNX Models
+
+| Component | Technology / Model | Size (Quantized) | Execution Target | Exact Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier A (Ultra Local)** | Desktop/Laptop with WebGPU ($\ge 4\text{ GB}$ VRAM/RAM) | `whisper-small.en` (WebGPU fp16/q4) + `wav2vec2-espeak` | Deterministic NLP + **WebLLM (`Qwen2.5-1.5B` or `Llama-3.2-1B`)** | ~850 MB (cached once in IndexedDB) |
-| **Tier B (Standard Local)** | Any Laptop / Modern Phone (WASM SIMD, no WebGPU or low VRAM) | `whisper-base.en` (WASM SIMD q8) + Acoustic Prosody DSP | Deterministic NLP (`harper.js` + CEFR Trie + Acoustic/Fluency Formula) | ~95 MB (cached once) |
-| **Tier C (Lite + Optional Edge Assist)** | Low-end Android / Old iOS Safari | `whisper-tiny.en` (WASM q8, ~40 MB) | Deterministic NLP locally + Optional free Cloudflare Workers AI (`@cf/meta/llama-3.1-8b-instruct`) when online | ~42 MB |
+| **Frontend UI** | React 19 + Vite + TanStack Router + Tailwind v4 | `~180 KB` | Main Thread | Exam interfaces, waveform canvas, diagnostic UI |
+| **Local Database** | `@sqlite.org/sqlite-wasm` (OPFS VFS) | `~850 KB` | `db.worker.ts` | ACID relational storage, FTS5 search, outbox log |
+| **Voice Activity Detection** | **Silero VAD v5** (`silero_vad.onnx`) | **`1.8 MB`** | `audio-dsp.worker.ts` | $30\text{ ms}$ frame speech/silence probabilities |
+| **Acoustic Prosody DSP** | **Rust $\to$ WASM DSP** (`pitch-detection` + `fft`) | **`0.4 MB`** | `audio-dsp.worker.ts` | Pitch contour $F_0(t)$ in semitones & rhythm $\text{nPVI}$ |
+| **Speech-to-Text (ASR)** | **Whisper ONNX** (`whisper-base.en` q8 / WebGPU fp16) | **`74 MB`** | `ai-scorer.worker.ts` | Verbatim transcript, word timestamps, token logprobs |
+| **Phoneme Pronunciation** | **Wav2Vec2-CTC** (`wav2vec2-lv-60-espeak-cv-ft` q8) | **`32 MB`** | `ai-scorer.worker.ts` | IPA forced alignment & Goodness of Pronunciation ($\text{GOP}$) |
+| **Semantic Relevance** | **BGE-Small-EN v1.5** (`bge-small-en-v1.5` q8 ONNX) | **`22 MB`** | `ai-scorer.worker.ts` | $384\text{-d}$ cosine similarity vs. prompt semantic anchors |
+| **Grammar & Syntax Engine** | **Harper WASM** (`harper.js`) + Clause Dependency | **`3.2 MB`** | `ai-scorer.worker.ts` | Sub-$50\text{ ms}$ grammar check + Error-Free Clause ratio |
+| **Lexical Profiler** | **SQLite CEFR/AWL Table + Aho-Corasick Trie** | **`2.5 MB`** | `ai-scorer.worker.ts` | $15,000$ CEFR headwords + $6,500$ IELTS collocations |
+| **Examiner Voice (TTS)** | **Kokoro-82M ONNX** or Pre-Packaged Opus Audio | **`80 MB`** (optional) | `ai-scorer.worker.ts` | Offline British/Australian/US voice for examiner |
+| **Spaced Repetition** | **FSRS v5** (`ts-fsrs`) | `~15 KB` | `db.worker.ts` | Optimal memory scheduling for error flashcards |
+| **Backup Archive** | **fflate** (Streaming ZIP/GZIP) | `~12 KB` | `db.worker.ts` | Zero-RAM-spike `.ieltsbackup` & `.ielts-archive.zip` |
+
+> **Total Core Scoring Footprint**: **$\approx 135\text{ MB}$** cached once in the browser's `Cache API` / `IndexedDB` — **nearly $7\times$ smaller and $10\times$ faster** than running a generative LLM, while working on standard laptops and phones without requiring a dedicated GPU.
 
 ---
 
-## 4. IELTS Speaking Auto-Scoring Engine (WASM + WebGPU Deep Dive)
+## 5. IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)
 
-Official IELTS Speaking is graded across **4 equally weighted criteria** (25% each):
-1. **Fluency and Coherence (FC)**
-2. **Lexical Resource (LR)**
-3. **Grammatical Range and Accuracy (GRA)**
-4. **Pronunciation (P)**
+### 5.1 End-to-End Speaking Signal Flow (Mermaid)
 
-Below is the complete mathematical and algorithmic pipeline executed inside `audio-dsp.worker.ts` and `ai-scorer.worker.ts`.
+```mermaid
+flowchart TD
+    MIC["User Microphone<br/>(MediaStream)"] --> WORKLET["AudioWorkletProcessor<br/>(16 kHz Mono Float32 PCM)"]
+    MIC --> REC["MediaRecorder<br/>(audio/webm;codecs=opus @ 24kbps)"]
+    REC --> OPFS_AUD[("OPFS: /audio/attempts/{id}.opus")]
 
-### 4.1 Audio Capture & Dual-Stream Processing Pipeline
+    WORKLET --> VAD["Silero VAD v5 (30ms windows)<br/>Speech vs. Silence Segments"]
+    WORKLET --> PROSODY["Rust WASM Prosody Analyzer<br/>pYIN Pitch F0(t) & Vocalic Peak nPVI"]
+    WORKLET --> WHISPER["Whisper-base.en ONNX<br/>(Verbatim Prompt + DTW Word Timestamps)"]
 
-When the candidate clicks **Record** (or when the examiner TTS finishes speaking in Mock Mode):
+    WHISPER --> TOKENS["Word Sequence W = {w_1, ..., w_N}<br/>with [s_i, e_i] & Posterior p(w_i)"]
+    TOKENS --> GOP["Wav2Vec2-CTC Forced Alignment<br/>Phoneme GOP & L1 Transfer Check"]
+    TOKENS --> HARPER["Harper WASM + Clause Parser<br/>Clauses C = {c_1, ..., c_K} & Grammar Errors"]
+    TOKENS --> LEX["CEFR/AWL Lookup + Aho-Corasick Trie<br/>Bidirectional MTLD & Collocations"]
+    TOKENS --> BGE["BGE-Small-EN ONNX<br/>384-d Embedding u vs. Prompt Anchors v_m"]
 
+    VAD & TOKENS & BGE --> FC["Criterion 1: Fluency & Coherence (B_FC)"]
+    LEX & BGE --> LR["Criterion 2: Lexical Resource (B_LR)"]
+    HARPER --> GRA["Criterion 3: Grammatical Range & Accuracy (B_GRA)"]
+    PROSODY & GOP & TOKENS --> PRON["Criterion 4: Pronunciation (B_P)"]
+
+    FC & LR & GRA & PRON --> FINAL["Official IELTS Half-Band Aggregator<br/>B_overall in {0.0, 0.5, ..., 9.0}"]
 ```
-Microphone (MediaStream)
-   |
-   +---> [1] MediaRecorder (audio/webm;codecs=opus @ 24kbps)
-   |         └──> Saved directly to OPFS: /audio/attempts/{attempt_id}.opus (~180KB/min)
-   |
-   +---> [2] AudioContext (16,000 Hz) ---> AudioWorkletProcessor (pcm-ring-buffer)
-             └──> Transfers 512-sample Float32 chunks to audio-dsp.worker.ts
-                    ├──> Silero VAD v5 (30ms windows) -> Voice/Silence State Machine
-                    ├──> Rust DSP WASM -> Pitch (F0), RMS Energy, Spectral Flux
-                    └──> Accumulated 16kHz Float32Array -> Sent to Whisper ONNX
-```
 
-#### Crucial Detail: Preserving Verbatim Disfluencies in Whisper
-By default, Whisper models are trained to strip out `"um"`, `"uh"`, and word repetitions. In IELTS Speaking, stripping disfluencies artificially inflates Fluency and Grammar scores!
-To force **verbatim transcription**, we pass a conditioned `initial_prompt` (decoder prefix tokens) to Whisper:
+### 5.2 Preserving Verbatim Disfluencies in Whisper
+
+Standard Whisper strips out `"um"`, `"uh"`, and false starts, which would artificially inflate a candidate's Fluency score. We condition Whisper's decoder with a **verbatim disfluency prefix prompt**:
+
 ```ts
-const VERBATIM_PROMPT =
-  "Um, uh, er, ah, like, you know, I mean, well, so, actually... " +
+const VERBATIM_INITIAL_PROMPT =
+  "Um, uh, er, ah, hmm, like, you know, I mean, well, so, actually... " +
   "I- I think, the the thing is, let me see.";
 ```
-Combined with `return_timestamps: "word"` (Dynamic Time Warping over cross-attention weights), Whisper outputs every word, filler, hesitation, start/end timestamp $[t_{\text{start}}, t_{\text{end}}]$, and token probability $p(w_i) \in (0, 1]$.
+
+With `return_timestamps: "word"`, Whisper outputs a sequence of $N$ words $W = \{w_1, w_2, \dots, w_N\}$, where each word $w_i$ has start time $s_i$, end time $e_i$, and acoustic token probability $p(w_i) \in (0, 1]$.
 
 ---
 
-### 4.2 Criterion 1: Fluency and Coherence ($B_{\text{FC}}$)
+### 5.3 Criterion 1: Fluency and Coherence ($B_{\text{FC}}$)
 
-#### Extracted Features
-Let $T_{\text{total}}$ be total response duration (seconds), $T_{\text{speech}}$ be total phonation time where Silero VAD probability $p_{\text{VAD}} > 0.5$, and $W = \{w_1, \dots, w_N\}$ be the transcribed word sequence with timestamps $[s_i, e_i]$.
+Let $T_{\text{total}}$ be total response duration in seconds, and let $T_{\text{speech}}$ be total phonation time where Silero VAD probability $p_{\text{VAD}}(t) > 0.5$.
 
-1. **Speech Rate ($\text{WPM}$)**:
-   $$\text{WPM} = \frac{N}{T_{\text{total}} / 60}$$
-   *(Band 8–9 native/fluent target: $130 \le \text{WPM} \le 165$. Below $90\text{ WPM}$ indicates severe hesitation; above $185\text{ WPM}$ with low clarity indicates rushed cluttering).*
+#### 1. Speech Rate ($\text{WPM}$) and Articulation Rate ($\text{AR}$)
 
-2. **Articulation Rate ($\text{AR}$, syllables/sec of pure speech)**:
-   $$\text{AR} = \frac{\sum_{i=1}^N \text{syllables}(w_i)}{T_{\text{speech}}}$$
+$$
+\text{WPM} = \frac{60 \cdot N}{T_{\text{total}}}, \qquad \text{AR} = \frac{\sum_{i=1}^{N} \text{syllables}(w_i)}{T_{\text{speech}}}
+$$
 
-3. **Phonation-Time Ratio ($\text{PTR}$)**:
-   $$\text{PTR} = \frac{T_{\text{speech}}}{T_{\text{total}}} \in [0, 1]$$
+#### 2. Phonation-Time Ratio ($\text{PTR}$)
 
-4. **Structural vs. Hesitation Pause Classification (The Secret Sauce)**:
-   A pause between $w_i$ and $w_{i+1}$ has duration $\Delta t_i = s_{i+1} - e_i$.
-   - Ignore micro-pauses $\Delta t_i < 0.25\text{ s}$ (natural stop consonant closure).
-   - **Natural Clause-Boundary Pause**: $\Delta t_i \in [0.25\text{ s}, 0.80\text{ s}]$ occurring after a clause boundary (punctuation `.`, `,`, `;` or coordinating/subordinating conjunction boundary). *Not penalized!*
-   - **Mid-Clause Hesitation Pause ($P_{\text{mid}}$)**: $\Delta t_i \ge 0.40\text{ s}$ occurring **inside** a syntactic phrase (e.g., between determiner and noun `"the [0.6s] government"`, or auxiliary and verb `"have been [0.7s] trying"`). *Heavily penalized!*
-   - **Long Freeze Pause ($P_{\text{long}}$)**: Any pause $\Delta t_i \ge 1.20\text{ s}$.
+$$
+\text{PTR} = \frac{T_{\text{speech}}}{T_{\text{total}}} \in [0, 1]
+$$
 
-5. **Mean Length of Run ($\text{MLR}$)**:
-   Mean number of words uttered continuously between any pauses $\ge 0.30\text{ s}$:
-   $$\text{MLR} = \frac{N}{1 + |\{i : \Delta t_i \ge 0.30\}|}$$
+#### 3. Structural Clause-Boundary Pauses vs. Mid-Clause Hesitation Pauses
+For every inter-word gap $\Delta t_i = s_{i+1} - e_i$:
+- **Micro-pause** ($\Delta t_i < 0.25\text{ s}$): Natural articulatory stop closure (ignored).
+- **Clause-Boundary Pause** ($\Delta t_i \in [0.25\text{ s}, 0.80\text{ s}]$ at punctuation `.`, `,`, `;` or conjunction boundary): Natural breathing/prosodic boundary (**zero penalty**).
+- **Mid-Clause Hesitation Pause ($P_{\text{mid}}$)**: $\Delta t_i \ge 0.40\text{ s}$ occurring **inside** a syntactic phrase (e.g., between determiner and noun `"the [0.6s] government"`). Counted per $100$ words:
 
-6. **Disfluency & Self-Correction Rate ($\text{DFR}$ per 100 words)**:
-   $$\text{DFR} = \frac{100}{N} \left( N_{\text{fillers}} + N_{\text{repeats}} + N_{\text{false\_starts}} \right)$$
-   where:
-   - $N_{\text{fillers}}$: count of `um, uh, er, ah, hmm, like (non-verb/prep), you know`.
-   - $N_{\text{repeats}}$: consecutive identical n-grams ($n \in \{1, 2, 3\}$), e.g., `"I think I think"`.
+$$
+R_{P_{\text{mid}}} = \frac{100}{N} \cdot \left| \left\{ i : \Delta t_i \ge 0.40 \land \neg\text{isClauseBoundary}(i) \right\} \right|
+$$
 
-7. **Discourse Marker & Cohesive Device Score ($S_{\text{cohesion}}$)**:
-   Evaluates variety across 6 functional categories:
-   - *Addition*: `furthermore, moreover, in addition, on top of that`
-   - *Contrast/Concession*: `however, nevertheless, having said that, whereas, on the flip side`
-   - *Cause/Effect*: `consequently, as a result, owing to, therefore`
-   - *Exemplification*: `for instance, to illustrate, a case in point is`
-   - *Structuring/Sequencing*: `firstly, moving on to, primarily, all things considered`
-   - *Hedging/Opinion*: `from my perspective, arguably, it seems plausible that`
+- **Long Freeze Pause Rate ($R_{P_{\text{long}}}$)**: Pauses where $\Delta t_i \ge 1.20\text{ s}$ per $100$ words:
 
-#### Mathematical Scoring Mapping for $B_{\text{FC}}$
-$$\hat{B}_{\text{FC}} = 9.0 - \min\Big(6.0,\; \alpha_1 \max(0, 125 - \text{WPM}) + \alpha_2 R_{P_{\text{mid}}} + \alpha_3 R_{P_{\text{long}}} + \alpha_4 \text{DFR} + \alpha_5 \max(0, 7.5 - \text{MLR})\Big) \cdot (1 - 0.15 S_{\text{cohesion}}) + \Delta_{\text{LLM,coherence}}$$
-where $\Delta_{\text{LLM,coherence}} \in [-1.0, +0.5]$ adjusts for topic relevance and logical progression (checking that the candidate actually answered the prompt rather than reciting a memorized script).
+$$
+R_{P_{\text{long}}} = \frac{100}{N} \cdot \left| \left\{ i : \Delta t_i \ge 1.20 \right\} \right|
+$$
 
----
+#### 4. Mean Length of Run ($\text{MLR}$)
+Average number of words spoken continuously between any pauses $\Delta t_i \ge 0.30\text{ s}$:
 
-### 4.3 Criterion 2: Lexical Resource ($B_{\text{LR}}$)
+$$
+\text{MLR} = \frac{N}{1 + \left| \left\{ i : \Delta t_i \ge 0.30 \right\} \right|}
+$$
 
-#### Extracted Features
+#### 5. Disfluency Rate ($\text{DFR}$)
 
-1. **Length-Invariant Lexical Diversity (MTLD — Measure of Textual Lexical Diversity)**:
-   Standard Type-Token Ratio ($\text{TTR} = V/N$) penalizes longer answers (such as a 2-minute Part 2 speech). Instead, we compute **bidirectional MTLD** with threshold $\theta = 0.72$:
-   - Scan tokens sequentially, computing running TTR; each time $\text{TTR} \le 0.72$, increment factor count and reset.
-   - Average forward and backward scans:
-     $$\text{MTLD} = \frac{\text{MTLD}_{\text{forward}} + \text{MTLD}_{\text{backward}}}{2}$$
-   *(Band 5: $\text{MTLD} \approx 40–50$; Band 7: $\text{MTLD} \approx 65–80$; Band 8.5–9: $\text{MTLD} \ge 90$).*
+$$
+\text{DFR} = \frac{100}{N} \left( N_{\text{fillers}} + N_{\text{repeats}} + N_{\text{false\_starts}} \right)
+$$
 
-2. **CEFR Lexical Sophistication Profile ($S_{\text{CEFR}}$)**:
-   Every lemmatized content word (nouns, verbs, adjectives, adverbs; excluding stopwords) is looked up in an embedded SQLite table (`cefr_lexicon`, ~15,000 headwords from Oxford 5000 + EFLLex + Academic Word List):
-   $$S_{\text{CEFR}} = \frac{1.0 N_{\text{B1}} + 2.0 N_{\text{B2}} + 3.5 N_{\text{C1}} + 5.0 N_{\text{C2}}}{N_{\text{content}}}$$
-   We also compute the **Rare/Advanced Word Ratio**:
-   $$R_{\text{adv}} = \frac{N_{\text{B2}} + N_{\text{C1}} + N_{\text{C2}} + N_{\text{AWL}}}{N_{\text{content}}}$$
+#### 6. Semantic Topic Relevance Gate ($\tau_{\text{topic}}$)
+Let $\mathbf{u} \in \mathbb{R}^{384}$ be the `bge-small-en-v1.5` embedding of the candidate's transcript and $\{\mathbf{v}_1, \dots, \mathbf{v}_M\}$ be the pre-computed semantic anchor vectors for the prompt:
 
-3. **Collocation & Idiomatic Expression Detection ($S_{\text{idiom}}$)**:
-   An Aho-Corasick automaton scans the lemmatized token stream against **6,500+ curated IELTS collocations, phrasal verbs, and idiomatic phrases** (e.g., `"strike a balance"`, `"detrimental effect"`, `"fast-paced environment"`, `"take for granted"`, `"double-edged sword"`).
-   - Cliche penalty: Overused memorized template idioms (`"every coin has two sides"`, `"in a nutshell"`) are flagged as cliché and given $0.2\times$ weight.
+$$
+\tau_{\text{topic}} = \max_{m \in \{1,\dots,M\}} \frac{\mathbf{u} \cdot \mathbf{v}_m}{\|\mathbf{u}\|_2 \, \|\mathbf{v}_m\|_2}
+$$
 
-4. **Prompt Paraphrasing Ratio ($S_{\text{para}}$)**:
-   Computes lemmatized content-word Jaccard similarity between the examiner's question $Q$ and the candidate's first 2 sentences $A_{1:2}$:
-   $$J(Q, A_{1:2}) = \frac{|\text{lemmas}(Q) \cap \text{lemmas}(A_{1:2})|}{|\text{lemmas}(Q)|}$$
-   High semantic similarity with low exact lexical overlap ($J < 0.35$) indicates successful paraphrasing (Band 7+).
+If $\tau_{\text{topic}} < 0.45$, an off-topic penalty $\Delta_{\text{topic}} = -1.5$ is applied (preventing candidates from reciting a memorized speech unrelated to the question).
+
+#### 7. Combined Fluency & Coherence Score ($\hat{B}_{\text{FC}}$)
+
+$$
+\hat{B}_{\text{FC}} = \text{clamp}_{[1, 9]}\left( 9.0 - \frac{\alpha_1 \max(0, 130 - \text{WPM}) + \alpha_2 R_{P_{\text{mid}}} + \alpha_3 R_{P_{\text{long}}} + \alpha_4 \text{DFR} + \alpha_5 \max(0, 8.0 - \text{MLR})}{1 + 0.15 S_{\text{cohesion}}} + \Delta_{\text{topic}} \right)
+$$
 
 ---
 
-### 4.4 Criterion 3: Grammatical Range and Accuracy ($B_{\text{GRA}}$)
+### 5.4 Criterion 2: Lexical Resource ($B_{\text{LR}}$)
 
-IELTS rewards **both** attempting complex structures (*Range*) and producing error-free clauses (*Accuracy*).
+#### 1. Bidirectional MTLD (Measure of Textual Lexical Diversity)
+Unlike raw Type-Token Ratio ($\text{TTR} = \frac{V}{N}$), which unfairly penalizes longer Part 2 speeches, $\text{MTLD}$ counts the average number of words required for running $\text{TTR}$ to drop to threshold $\theta = 0.72$ in both forward and backward passes:
 
-#### Extracted Features
+$$
+\text{MTLD} = \frac{\text{MTLD}_{\text{forward}}(\theta) + \text{MTLD}_{\text{backward}}(\theta)}{2}
+$$
 
-1. **Clause Segmentation & Error-Free Clause Ratio ($\text{EFC}$)**:
-   The transcript is segmented into independent and dependent clauses $C = \{c_1, c_2, \dots, c_K\}$.
-   `harper.js` (WASM) + custom grammatical dependency rules + WebLLM inspect each clause $c_k$:
-   $$\text{EFC} = \frac{|\{c_k \in C : \text{errors}(c_k) = 0\}|}{K}$$
-   *Empirical SLA Mapping to IELTS GRA*:
-   - $\text{EFC} \ge 0.85 \implies$ Band 8.0–9.0 ("produces majority of error-free sentences with only very occasional inappropriacies")
-   - $0.65 \le \text{EFC} < 0.85 \implies$ Band 7.0–7.5 ("frequently produces error-free sentences")
-   - $0.45 \le \text{EFC} < 0.65 \implies$ Band 6.0–6.5 ("makes some errors in complex structures, though these rarely impede communication")
-   - $\text{EFC} < 0.45 \implies$ Band 4.5–5.5
+#### 2. CEFR & Academic Word List Sophistication Index ($S_{\text{CEFR}}$)
+For all lemmatized content words $N_{\text{content}}$ matched against the local `cefr_lexicon` table:
 
-2. **Syntactic Complexity & Structural Variety Index ($S_{\text{range}}$)**:
-   - **Subordinate Clause Ratio ($\text{SCR}$)**:
-     $$\text{SCR} = \frac{K_{\text{subordinate}}}{K_{\text{total}}}$$
-   - **Grammatical Family Checklist** (checks presence across 10 target grammatical families):
-     1. Relative clauses (`who, which, that, whose, where`)
-     2. Conditional structures (`if/unless/provided that` + modal past/perfect)
-     3. Passive voice (`be/get + V3`)
-     4. Perfect & Perfect Continuous aspects (`have/had been V-ing`, `have V3`)
-     5. Modal verbs of probability/deduction (`might have, must be, could potentially`)
-     6. Cleft sentences (`What I find fascinating is...`, `It is the youth who...`)
-     7. Comparative/Superlative correlatives (`the more..., the more...`, `far more X than Y`)
-     8. Participial clauses (`Having lived there for years,...`, `Driven by economic growth,...`)
-     9. Subjunctive / Hypothetical (`I wish I had...`, `It is vital that the government invest...`)
-     10. Negative inversion (`Not only does it..., Rarely do we see...`)
+$$
+S_{\text{CEFR}} = \frac{1.0 N_{\text{B1}} + 2.0 N_{\text{B2}} + 3.5 N_{\text{C1}} + 5.0 N_{\text{C2}}}{N_{\text{content}}}, \qquad R_{\text{adv}} = \frac{N_{\text{B2}} + N_{\text{C1}} + N_{\text{C2}} + N_{\text{AWL}}}{N_{\text{content}}}
+$$
 
-   $$S_{\text{range}} = \min\left(1.0,\; \frac{N_{\text{distinct\_families\_used}}}{5.0}\right) \cdot 0.6 + \min\left(1.0,\; \frac{\text{SCR}}{0.40}\right) \cdot 0.4$$
+#### 3. Idiomatic & Collocation Density ($S_{\text{colloc}}$)
+Let $N_{\text{colloc}}$ be the number of distinct multi-word collocations and phrasal verbs matched by the Aho-Corasick automaton (including prompt-specific `target_collocations`), and $N_{\text{cliche}}$ be memorized template cliches:
 
----
+$$
+S_{\text{colloc}} = \min\left( 1.0, \; \frac{N_{\text{colloc}} + 0.2 N_{\text{cliche}}}{4.0} \right)
+$$
 
-### 4.5 Criterion 4: Pronunciation ($B_{\text{P}}$)
+#### 4. Prompt Paraphrasing Score ($S_{\text{para}}$)
+Given prompt content lemmas $L_Q$ and the candidate's opening response lemmas $L_A$:
 
-A common mistake in naive browser apps is using only browser `webkitSpeechRecognition` text output, which has zero acoustic visibility. Our pipeline analyzes the **raw 16 kHz audio waveform** alongside **ASR token posteriors** and **CTC phoneme alignment**.
+$$
+S_{\text{para}} = \tau_{\text{topic}} \cdot \left( 1 - \frac{|L_Q \cap L_A|}{|L_Q \cup L_A|} \right)
+$$
 
-#### Extracted Acoustic & Phonetic Features
-
-1. **ASR Acoustic Intelligibility & Word Confidence ($\bar{P}_{\text{ASR}}$ & $\text{LCWR}$)**:
-   From Whisper ONNX's per-word probability $p(w_i)$:
-   $$\bar{P}_{\text{ASR}} = \frac{1}{N} \sum_{i=1}^N p(w_i), \qquad \text{LCWR} = \frac{|\{w_i : p(w_i) < 0.65\}|}{N}$$
-   Words with $p(w_i) < 0.65$ are highlighted in yellow/red in the UI as **Unclear / Mispronounced Tokens**.
-
-2. **Phoneme-Level Goodness of Pronunciation (GOP) & L1 Indonesian Interference Detector**:
-   For words flagged with $p(w_i) < 0.80$ (or all content words on Tier A/B devices), we run forced alignment using **Wav2Vec2-CTC (`wav2vec2-lv-60-espeak-cv-ft` ONNX)** over the word's audio slice $[s_i, e_i]$ and compare the observed phoneme posterior $P(\phi \mid X)$ against the expected IPA sequence from the CMU/eSpeak Pronouncing Dictionary:
-   $$\text{GOP}(\phi) = \frac{1}{T_\phi} \sum_{t \in \phi} \log \frac{P(\phi \mid x_t)}{\max_{\psi \in \Phi} P(\psi \mid x_t)} \le 0$$
-   Specifically tracks common **Indonesian L1 -> English L2 phonological transfer patterns**:
-   - Dental fricative substitution: `/θ/` $\to$ `/t/` (*think* $\to$ *tink*), `/ð/` $\to$ `/d/` (*they* $\to$ *dey*)
-   - Labiodental voicing: `/v/` $\to$ `/f/` (*very* $\to$ *fery*)
-   - Palato-alveolar sibilant: `/ʃ/` $\to$ `/s/` (*she* $\to$ *see*)
-   - Word-final consonant cluster reduction: dropping final `/t, d, k/` (*fact* $\to$ *fac*, *helped* $\to$ *help*)
-   - Missing grammatical `-ed` (`/t, d, ɪd/`) and `-s/-es` (`/s, z, ɪz/`) endings (which simultaneously hurts Pronunciation and GRA!).
-
-3. **Intonation & Pitch Expressiveness ($\sigma_{F_0,\text{ST}}$)**:
-   Using the YIN / pYIN algorithm in `audio-dsp.worker.ts` (50 Hz – 450 Hz voiced frames), we convert fundamental frequency $F_0(t)$ into **semitones relative to the speaker's median pitch** $F_{0,\text{med}}$ (making the metric gender-invariant!):
-   $$f_{\text{ST}}(t) = 12 \log_2 \left( \frac{F_0(t)}{F_{0,\text{med}}} \right)$$
-   $$\sigma_{F_0,\text{ST}} = \sqrt{\frac{1}{T_{\text{voiced}}} \sum_{t} \big(f_{\text{ST}}(t) - \bar{f}_{\text{ST}}\big)^2}$$
-   - Monotone / Robotic delivery: $\sigma_{F_0,\text{ST}} < 1.8\text{ semitones}$ (penalized to Band 5–6).
-   - Natural expressive English intonation: $2.5 \le \sigma_{F_0,\text{ST}} \le 4.8\text{ semitones}$ (Band 7.5–9).
-
-4. **Stress-Timed Rhythm via Normalized Pairwise Variability Index ($\text{nPVI}$)**:
-   English is a *stress-timed* language (large duration contrast between stressed and unstressed syllables), whereas Bahasa Indonesia is *syllable-timed* (nearly equal syllable durations).
-   Given vocalic energy peak durations $\{d_1, d_2, \dots, d_m\}$:
-   $$\text{nPVI} = \frac{100}{m - 1} \sum_{k=1}^{m-1} \left| \frac{d_k - d_{k+1}}{(d_k + d_{k+1}) / 2} \right|$$
-   - Syllable-timed (flat rhythm): $\text{nPVI} < 42$
-   - Native/Fluent stress-timed English target: $52 \le \text{nPVI} \le 68$
+High semantic similarity ($\tau_{\text{topic}}$) paired with low verbatim word copying yields a high paraphrasing score.
 
 ---
 
-### 4.6 Final Band Score Aggregation & Calibration
+### 5.5 Criterion 3: Grammatical Range and Accuracy ($B_{\text{GRA}}$)
 
-1. Each criterion raw score $\hat{B}_c \in [1.0, 9.0]$ ($c \in \{\text{FC, LR, GRA, P}\}$) is rounded to the nearest half-band:
-   $$B_c = \frac{\lfloor 2 \hat{B}_c + 0.5 \rfloor}{2}$$
-2. The overall Speaking Band Score follows the official Cambridge / British Council / IDP rounding rule:
-   $$\bar{B} = \frac{B_{\text{FC}} + B_{\text{LR}} + B_{\text{GRA}} + B_{\text{P}}}{4}$$
-   $$B_{\text{overall}} = \frac{\lfloor 2 \bar{B} + 0.5 \rfloor}{2}$$
-   *(Specifically: `.25` rounds UP to `.50`; `.75` rounds UP to the next whole band `.0`; `.125` rounds DOWN to `.0`; `.625` rounds DOWN to `.50`).*
+#### 1. Error-Free Clause Ratio ($\text{EFC}$)
+The transcript is split into $K$ clauses $C = \{c_1, c_2, \dots, c_K\}$. Using `harper.js` (WASM) and morphosyntactic agreement rules (subject-verb agreement, tense consistency, article usage, preposition subcategorization):
 
----
+$$
+\text{EFC} = \frac{\left| \left\{ c_k \in C : \text{errorCount}(c_k) = 0 \right\} \right|}{K}
+$$
 
-## 5. Writing, Reading, Listening & FSRS Study Modules
+#### 2. Weighted Error Density ($\text{WED}$)
+Errors are classified by severity weight $\omega_e \in \{0.5\text{ (minor slip)}, 1.0\text{ (local error)}, 2.0\text{ (communication-impeding)}\}$:
 
-### 5.1 IELTS Writing Auto-Scoring Lab (Task 1 & Task 2)
-- **Supported Modes**:
-  - **Academic Task 1** (20 mins, $\ge 150$ words): Data chart/graph/process/map rendered via SVG/Chart.js alongside a structured JSON ground-truth descriptor (`key_trends`, `extrema`, `comparisons`) so the local scorer verifies whether the user actually reported the key features!
-  - **General Training Task 1** (20 mins, $\ge 150$ words): Formal, semi-formal, and informal letter prompts with tone consistency checker.
-  - **Task 2 Essay** (40 mins, $\ge 250$ words): Opinion, Discussion, Problem-Solution, Two-Part Question, and Advantage-Disadvantage prompts.
-- **4-Criterion Scoring Engine**:
-  - **Task Achievement / Task Response (TA/TR)**: Word count penalty check (under 150/250 words), paragraph structure check (Intro + Overview/Body 1 + Body 2 + Conclusion), prompt keyword/aspect coverage, and WebLLM thesis-to-argument alignment check.
-  - **Coherence and Cohesion (CC)**: Paragraph transition analysis, cohesive device density & variety, pronoun reference ambiguity check, and topic sentence detection.
-  - **Lexical Resource (LR)**: Academic Word List (AWL) coverage, MTLD diversity, spelling accuracy via `harper.js`, repetition heatmap (highlights words repeated $>3$ times in close proximity).
-  - **Grammatical Range and Accuracy (GRA)**: Clause complexity, punctuation check, error-free sentence ratio, inline red/green diff rewrite suggestions.
-- **Overall Writing Band**:
-  $$B_{\text{Writing}} = \text{round}_{0.5}\left( \frac{1}{3} B_{\text{Task1}} + \frac{2}{3} B_{\text{Task2}} \right)$$
-  *(Task 2 carries $2\times$ the weight of Task 1, matching official IELTS weighting).*
+$$
+\text{WED} = \frac{\sum_{e \in E} \omega_e}{K}
+$$
 
-### 5.2 IELTS Reading Simulator
-- **Exam-Authentic Split View**: Resizable left passage pane (with text highlighter: Yellow/Pink/Cyan + inline margin notes persisted locally) and right question navigator.
-- **All 14 Official Question Types**:
-  1. True / False / Not Given
-  2. Yes / No / Not Given
-  3. Matching Headings (drag-and-drop)
-  4. Matching Paragraph Information
-  5. Matching Features / Names
-  6. Matching Sentence Endings
-  7. Multiple Choice (Single & Multiple Answer)
-  8. Summary / Note / Table / Flow-chart Completion (with or without word bank)
-  9. Diagram Label Completion
-  10. Short-Answer Questions (strict word-limit validator: e.g., `NO MORE THAN TWO WORDS AND/OR A NUMBER`)
-- **Post-Test Evidence Jump**: Clicking any graded question scrolls the passage to the exact `evidence_span_id` and explains *why* False vs. Not Given applies.
+#### 3. Syntactic Complexity & Range Index ($S_{\text{range}}$)
+Let $K_{\text{sub}}$ be the number of subordinate/dependent clauses and $F_{\text{used}} \in \{0, \dots, 10\}$ be the count of distinct complex grammatical families detected (relative clauses, conditionals, passive voice, perfect continuous, modals of deduction, cleft sentences, participial phrases, comparatives, subjunctive, negative inversion):
 
-### 5.3 IELTS Listening Simulator
-- **Offline Multi-Voice Audio Engine**:
-  - Pre-packaged high-compression Opus audio tracks (`24 kbps`, ~4.5 MB per full 30-minute test) **plus** dynamic infinite drill generation using **Kokoro-82M multi-speaker TTS** (British, Australian, North American voices for Section 1 dialogues and Section 4 university lectures).
-- **Answer Normalizer Engine**:
-  - Deterministic parser supporting British/American spelling equivalence (`colour`/`color`, `centre`/`center`), number/word equivalence (`14`/`fourteen`), time/date normalizations (`14th Oct` / `October 14` / `14 October`), and optional bracketed words `(the) station`.
+$$
+\text{SCR} = \frac{K_{\text{sub}}}{K}, \qquad S_{\text{range}} = 0.6 \cdot \min\left(1.0, \frac{F_{\text{used}}}{5.0}\right) + 0.4 \cdot \min\left(1.0, \frac{\text{SCR}}{0.40}\right)
+$$
 
-### 5.4 Automated FSRS v5 Spaced Repetition Deck
-- Every Speaking and Writing session automatically extracts:
-  1. **Mispronounced Words** (with embedded TTS audio + IPA + user's recorded clip for comparison)
-  2. **Grammar Corrections** (Cloze deletion card: user's erroneous sentence $\to$ corrected Band-8 sentence)
-  3. **Vocabulary Upgrades** (B1 word the user overused $\to$ context-appropriate C1/C2 collocation)
-- Scheduled locally using **FSRS v5 (`ts-fsrs`)** stored in SQLite-WASM (`srs_cards` & `srs_review_logs`).
+#### 4. Combined GRA Score ($\hat{B}_{\text{GRA}}$)
+
+$$
+\hat{B}_{\text{GRA}} = \text{clamp}_{[1, 9]}\left( 3.0 + 4.2 \cdot \text{EFC} + 2.2 \cdot S_{\text{range}} - 1.5 \cdot \text{WED} \right)
+$$
 
 ---
 
-## 6. Local-First Storage Architecture & SQLite-WASM Schema
+### 5.6 Criterion 4: Pronunciation ($B_{\text{P}}$)
 
-### 6.1 Browser Storage Tier Allocation
+#### 1. ASR Acoustic Confidence & Low-Confidence Word Ratio ($\text{LCWR}$)
 
-| Storage Mechanism | Data Stored | Typical Size | Persistence Guarantee |
-| :--- | :--- | :--- | :--- |
-| **OPFS (`/db/ielts.sqlite3`)** | All relational tables, transcripts, scores, SRS cards, CRDT oplog | 5 MB – 50 MB | `navigator.storage.persist()` requested on first test |
-| **OPFS (`/audio/attempts/*.opus`)** | User's recorded Speaking answers (`audio/webm;codecs=opus`) | ~200 KB / minute of speech | Persistent disk file handle; streamable to ZIP/R2 |
-| **Cache API / IndexedDB** | ONNX / WebLLM model weights (`whisper`, `silero`, `kokoro`, `qwen`) | 95 MB – 900 MB | Content-addressed by HuggingFace revision hash |
-| **`localStorage`** | `device_id`, `theme`, `last_sync_hlc`, `auth_user_preview` | `< 4 KB` | Instant synchronous read before Worker boots |
+$$
+\bar{P}_{\text{ASR}} = \frac{1}{N} \sum_{i=1}^{N} p(w_i), \qquad \text{LCWR} = \frac{\left| \left\{ w_i : p(w_i) < 0.65 \right\} \right|}{N}
+$$
 
-### 6.2 Complete SQLite-WASM Database Schema (`schema.sql`)
+#### 2. Phoneme Goodness of Pronunciation ($\text{GOP}$) & Indonesian L1 Transfer
+For each target phoneme $\phi$ spanning audio frames $t \in [t_1, t_2]$ with duration $T_\phi = t_2 - t_1 + 1$, Wav2Vec2-CTC yields frame posterior $P(\phi \mid x_t)$:
+
+$$
+\text{GOP}(\phi) = \frac{1}{T_\phi} \sum_{t=t_1}^{t_2} \log \left( \frac{P(\phi \mid x_t)}{\max_{\psi \in \Phi} P(\psi \mid x_t)} \right) \le 0
+$$
+
+The analyzer specifically flags common Indonesian L1 phonological substitutions:
+- Dental fricatives: $/ \theta / \to / \text{t} /$ (*think* $\to$ *tink*) and $/ \eth / \to / \text{d} /$ (*that* $\to$ *dat*)
+- Labiodental fricative: $/ \text{v} / \to / \text{f} /$ (*very* $\to$ *fery*)
+- Palato-alveolar sibilant: $/ \int / \to / \text{s} /$ (*she* $\to$ *see*)
+- Final cluster reduction & missing inflectional codas (`-ed` $/ \text{t}, \text{d}, \text{Id} /$ and `-s` $/ \text{s}, \text{z}, \text{Iz} /$)
+
+#### 3. Gender-Invariant Pitch Variation in Semitones ($\sigma_{F_0,\text{ST}}$)
+Using the pYIN pitch detector over voiced frames, raw frequency $F_0(t)$ (Hz) is normalized against the speaker's median frequency $F_{0,\text{med}}$:
+
+$$
+f_{\text{ST}}(t) = 12 \log_2 \left( \frac{F_0(t)}{F_{0,\text{med}}} \right), \qquad \sigma_{F_0,\text{ST}} = \sqrt{\frac{1}{T_{\text{voiced}}} \sum_{t=1}^{T_{\text{voiced}}} \left( f_{\text{ST}}(t) - \bar{f}_{\text{ST}} \right)^2}
+$$
+
+- Flat/monotone delivery: $\sigma_{F_0,\text{ST}} < 1.8\text{ ST}$ (penalized).
+- Natural expressive English prosody: $2.5 \le \sigma_{F_0,\text{ST}} \le 4.8\text{ ST}$.
+
+#### 4. Stress-Timed Rhythm via Normalized Pairwise Variability Index ($\text{nPVI}$)
+Given $m$ consecutive vocalic syllable nucleus durations $\{d_1, d_2, \dots, d_m\}$:
+
+$$
+\text{nPVI} = \frac{100}{m - 1} \sum_{k=1}^{m-1} \left| \frac{d_k - d_{k+1}}{\frac{d_k + d_{k+1}}{2}} \right|
+$$
+
+- Syllable-timed rhythm (flat syllable lengths): $\text{nPVI} < 42$.
+- Native stress-timed English target: $52 \le \text{nPVI} \le 68$.
+
+---
+
+### 5.7 Official IELTS Half-Band Rounding Formula
+
+Each criterion score $B_c$ ($c \in \{\text{FC}, \text{LR}, \text{GRA}, \text{P}\}$) and the overall Speaking band $B_{\text{Speaking}}$ are rounded to the nearest $0.5$ band using the official IELTS rounding rule:
+
+$$
+B_c = \frac{\lfloor 2 \hat{B}_c + 0.5 \rfloor}{2}, \qquad \bar{B} = \frac{B_{\text{FC}} + B_{\text{LR}} + B_{\text{GRA}} + B_{\text{P}}}{4}, \qquad B_{\text{Speaking}} = \frac{\lfloor 2 \bar{B} + 0.5 \rfloor}{2}
+$$
+
+---
+
+## 6. Writing, Reading, Listening & FSRS v5 Study Modules
+
+### 6.1 IELTS Writing Auto-Scoring Lab (Task 1 & Task 2)
+- **Pre-Generated Visuals & Ground-Truth Metadata**:
+  - **Academic Task 1**: Dynamic SVG bar/line/pie charts, tables, process diagrams, and maps. Each prompt in `prompts` includes a structured ground-truth spec (`key_trends`, `max_min_entities`, `comparison_pairs`, `required_units`). The scorer deterministically checks whether the candidate's essay mentions the required overview trends and numerical comparisons.
+  - **Task 2 Essay**: Curated prompts across all 5 official essay types with pre-computed semantic anchor vectors for each prompt question part.
+- **Weighted Overall Writing Band**:
+
+$$
+\bar{B}_{\text{Writing}} = \frac{B_{\text{Task1}} + 2 \cdot B_{\text{Task2}}}{3}, \qquad B_{\text{Writing}} = \frac{\lfloor 2 \bar{B}_{\text{Writing}} + 0.5 \rfloor}{2}
+$$
+
+### 6.2 Reading & Listening Simulators
+- **Reading**: 3-passage split-screen interface with persistent highlighters (Yellow/Pink/Cyan), margin notes, all 14 official question types, and 1-click **Evidence Span Jump** on post-test review.
+- **Listening**: 4-section Opus audio player (`24 kbps`, $\approx 4.5\text{ MB}$ per full 30-minute test) + deterministic **Answer Normalizer** handling UK/US spelling (`colour`/`color`), number/word equivalence (`14`/`fourteen`), date formats, and optional bracketed tokens.
+
+### 6.3 FSRS v5 Automated Spaced Repetition (`ts-fsrs`)
+After every Speaking or Writing test, the platform automatically generates flashcards from the user's actual mistakes (mispronounced words with IPA + audio comparison, grammar error cloze cards, and C1 collocation upgrades).
+For a card with stability $S$ (days) and elapsed time $t$ (days), FSRS v5 models retrievability $R(t, S)$ as:
+
+$$
+R(t, S) = \left( 1 + \frac{19}{81} \cdot \frac{t}{S} \right)^{-0.5}
+$$
+
+---
+
+## 7. Local-First Storage Architecture & ER Schema (Mermaid + SQL)
+
+### 7.1 Local SQLite-WASM Entity-Relationship Diagram (Mermaid)
+
+```mermaid
+erDiagram
+    PROMPTS ||--o{ SPEAKING_ATTEMPTS : "used in"
+    PROMPTS ||--o{ WRITING_ATTEMPTS : "used in"
+    PROMPTS ||--o{ RECEPTIVE_ATTEMPTS : "used in"
+    STUDY_SESSIONS ||--|{ SPEAKING_ATTEMPTS : "contains"
+    STUDY_SESSIONS ||--|{ WRITING_ATTEMPTS : "contains"
+    STUDY_SESSIONS ||--|{ RECEPTIVE_ATTEMPTS : "contains"
+    SPEAKING_ATTEMPTS ||--o{ SRS_CARDS : "generates"
+    WRITING_ATTEMPTS ||--o{ SRS_CARDS : "generates"
+
+    PROMPTS {
+        TEXT id PK "e.g. spk_p2_tech_042"
+        TEXT module "speaking | writing | reading | listening"
+        INTEGER part "1, 2, 3, or 4"
+        TEXT category "Topic / Question Type"
+        TEXT title "Display Title"
+        TEXT payload_json "Cue cards, SVG data, Semantic Anchors, Model Answers"
+        INTEGER version "Pack version"
+    }
+
+    STUDY_SESSIONS {
+        TEXT id PK "UUIDv7 (time-ordered)"
+        TEXT user_id "NULL (guest) or Google sub"
+        TEXT module "speaking | writing | reading | listening | full_mock"
+        TEXT mode "exam_simulation | part_drill"
+        INTEGER started_at "Unix ms"
+        INTEGER completed_at "Unix ms"
+        REAL overall_band "0.0 to 9.0"
+        TEXT subscores_json "JSON criterion breakdown"
+        TEXT hlc "Hybrid Logical Clock"
+        INTEGER is_deleted "Soft delete tombstone"
+    }
+
+    SPEAKING_ATTEMPTS {
+        TEXT id PK "UUIDv7"
+        TEXT session_id FK
+        TEXT prompt_id FK
+        INTEGER part "1, 2, or 3"
+        INTEGER duration_ms
+        TEXT audio_opfs_path "/audio/attempts/{id}.opus"
+        TEXT audio_sha256 "Content hash for R2 dedup"
+        TEXT transcript_raw "Verbatim Whisper transcript"
+        TEXT word_timestamps_json "Word timings, posteriors, GOP, pauses"
+        TEXT acoustic_metrics_json "WPM, AR, PTR, MLR, F0_ST, nPVI"
+        TEXT lexical_metrics_json "MTLD, CEFR dist, collocations"
+        TEXT grammar_metrics_json "EFC ratio, SCR, Harper errors"
+        REAL band_fc
+        REAL band_lr
+        REAL band_gra
+        REAL band_p
+        REAL band_overall
+        TEXT hlc
+        INTEGER is_deleted
+    }
+
+    WRITING_ATTEMPTS {
+        TEXT id PK "UUIDv7"
+        TEXT session_id FK
+        TEXT prompt_id FK
+        INTEGER task_number "1 or 2"
+        TEXT essay_text
+        INTEGER word_count
+        TEXT metrics_json "MTLD, AWL, EFC, trend coverage"
+        TEXT inline_annotations_json "Grammar & lexical diff spans"
+        REAL band_ta_tr
+        REAL band_cc
+        REAL band_lr
+        REAL band_gra
+        REAL band_overall
+        TEXT hlc
+        INTEGER is_deleted
+    }
+
+    RECEPTIVE_ATTEMPTS {
+        TEXT id PK "UUIDv7"
+        TEXT session_id FK
+        TEXT prompt_id FK
+        TEXT module "reading | listening"
+        INTEGER raw_score "0 to 40"
+        REAL band_score "0.0 to 9.0"
+        TEXT answers_json "User vs correct answers"
+        TEXT highlights_json "Passage highlights & notes"
+        TEXT hlc
+        INTEGER is_deleted
+    }
+
+    SRS_CARDS {
+        TEXT id PK "Deterministic hash or UUIDv7"
+        TEXT source_attempt_id FK
+        TEXT card_type "pronunciation | grammar_fix | collocation"
+        TEXT front_text
+        TEXT back_text
+        TEXT ipa_phonetic
+        INTEGER due_at "Next review Unix ms"
+        REAL stability "FSRS S parameter"
+        REAL difficulty "FSRS D parameter"
+        INTEGER reps
+        INTEGER lapses
+        INTEGER state "0=New, 1=Learn, 2=Review, 3=Relearn"
+        TEXT hlc
+        INTEGER is_deleted
+    }
+
+    SYNC_OUTBOX {
+        TEXT hlc PK "Monotonic HLC timestamp"
+        TEXT table_name "Target entity table"
+        TEXT row_id "Target entity PK"
+        TEXT payload_json "Serialized row state"
+        INTEGER created_at
+        INTEGER synced_at "NULL until ACKed by Worker"
+    }
+```
+
+### 7.2 Complete SQLite-WASM Database Schema (`schema.sql`)
 
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = ON;
 
--- 1. Local User & Device Metadata
 CREATE TABLE IF NOT EXISTS local_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     updated_at INTEGER NOT NULL
 );
 
--- 2. Question Bank (Seeded from static JSON packs + custom prompts)
 CREATE TABLE IF NOT EXISTS prompts (
-    id TEXT PRIMARY KEY,                      -- e.g., 'spk_p2_describe_book_01'
-    module TEXT NOT NULL,                     -- 'speaking' | 'writing' | 'reading' | 'listening'
-    part INTEGER NOT NULL,                    -- 1, 2, 3, or 4
-    category TEXT NOT NULL,                   -- e.g., 'Technology', 'Environment', 'Academic_T1_Bar'
+    id TEXT PRIMARY KEY,
+    module TEXT NOT NULL,
+    part INTEGER NOT NULL,
+    category TEXT NOT NULL,
     title TEXT NOT NULL,
-    payload_json TEXT NOT NULL,               -- Cue card bullets, sub-questions, chart SVG data, or passage markdown
+    payload_json TEXT NOT NULL,
     difficulty_band REAL DEFAULT 7.0,
     version INTEGER NOT NULL DEFAULT 1
 );
 
--- 3. Exam / Practice Sessions
 CREATE TABLE IF NOT EXISTS study_sessions (
-    id TEXT PRIMARY KEY,                      -- UUIDv7 (time-sortable!)
-    user_id TEXT,                             -- NULL when anonymous, Google sub ID when logged in
-    module TEXT NOT NULL,                     -- 'speaking' | 'writing' | 'reading' | 'listening' | 'full_mock'
-    mode TEXT NOT NULL,                       -- 'exam_simulation' | 'part_drill' | 'pronunciation_drill'
-    started_at INTEGER NOT NULL,              -- Unix ms
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    module TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
     completed_at INTEGER,
-    overall_band REAL,                        -- 0.0 to 9.0 (step 0.5)
-    subscores_json TEXT,                      -- e.g., {"fc":7.0,"lr":7.5,"gra":6.5,"p":7.0}
-    hlc TEXT NOT NULL,                        -- Hybrid Logical Clock timestamp for sync
+    overall_band REAL,
+    subscores_json TEXT,
+    hlc TEXT NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_module_date ON study_sessions(module, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_hlc ON study_sessions(hlc);
 
--- 4. Speaking Attempts (1-to-many per study_session)
 CREATE TABLE IF NOT EXISTS speaking_attempts (
-    id TEXT PRIMARY KEY,                      -- UUIDv7
+    id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
     prompt_id TEXT NOT NULL,
-    part INTEGER NOT NULL,                    -- 1, 2, or 3
+    part INTEGER NOT NULL,
     question_text TEXT NOT NULL,
     duration_ms INTEGER NOT NULL,
-    audio_opfs_path TEXT,                     -- e.g., '/audio/attempts/0192f...opus'
-    audio_sha256 TEXT,                        -- Content hash for deduplicated R2 upload
+    audio_opfs_path TEXT,
+    audio_sha256 TEXT,
     audio_size_bytes INTEGER,
     audio_r2_synced INTEGER NOT NULL DEFAULT 0,
     transcript_raw TEXT NOT NULL,
-    word_timestamps_json TEXT NOT NULL,       -- [{w, start, end, prob, gop, is_filler, pause_after_ms}]
-    acoustic_metrics_json TEXT NOT NULL,      -- {wpm, ar, ptr, mlr, spf, mid_clause_pauses, f0_std_st, npvi}
-    lexical_metrics_json TEXT NOT NULL,       -- {mtld, cefr_dist, collocations_found, paraphrase_score}
-    grammar_metrics_json TEXT NOT NULL,       -- {efc_ratio, scr, families_detected, errors: [...]}
-    llm_feedback_json TEXT,                   -- {coherence_notes, sentence_upgrades: [...], model_answer}
+    word_timestamps_json TEXT NOT NULL,
+    acoustic_metrics_json TEXT NOT NULL,
+    lexical_metrics_json TEXT NOT NULL,
+    grammar_metrics_json TEXT NOT NULL,
+    semantic_metrics_json TEXT NOT NULL,
     band_fc REAL NOT NULL,
     band_lr REAL NOT NULL,
     band_gra REAL NOT NULL,
@@ -483,17 +641,16 @@ CREATE TABLE IF NOT EXISTS speaking_attempts (
 CREATE INDEX IF NOT EXISTS idx_speaking_session ON speaking_attempts(session_id);
 CREATE INDEX IF NOT EXISTS idx_speaking_hlc ON speaking_attempts(hlc);
 
--- 5. Writing Attempts
 CREATE TABLE IF NOT EXISTS writing_attempts (
-    id TEXT PRIMARY KEY,                      -- UUIDv7
+    id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
     prompt_id TEXT NOT NULL,
-    task_number INTEGER NOT NULL,             -- 1 or 2
+    task_number INTEGER NOT NULL,
     essay_text TEXT NOT NULL,
     word_count INTEGER NOT NULL,
     time_spent_ms INTEGER NOT NULL,
-    metrics_json TEXT NOT NULL,               -- {mtld, awl_ratio, efc_ratio, paragraph_count}
-    inline_annotations_json TEXT NOT NULL,    -- [{start_char, end_char, category, severity, replacement, explanation}]
+    metrics_json TEXT NOT NULL,
+    inline_annotations_json TEXT NOT NULL,
     band_ta_tr REAL NOT NULL,
     band_cc REAL NOT NULL,
     band_lr REAL NOT NULL,
@@ -504,39 +661,37 @@ CREATE TABLE IF NOT EXISTS writing_attempts (
     is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
--- 6. Reading & Listening Attempts
 CREATE TABLE IF NOT EXISTS receptive_attempts (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
     prompt_id TEXT NOT NULL,
-    module TEXT NOT NULL,                     -- 'reading' | 'listening'
-    raw_score INTEGER NOT NULL,               -- 0 to 40
+    module TEXT NOT NULL,
+    raw_score INTEGER NOT NULL,
     total_questions INTEGER NOT NULL DEFAULT 40,
     band_score REAL NOT NULL,
-    answers_json TEXT NOT NULL,               -- [{q_num, user_ans, correct_ans, is_correct, time_ms}]
-    highlights_json TEXT,                     -- User passage highlights & margin notes
+    answers_json TEXT NOT NULL,
+    highlights_json TEXT,
     created_at INTEGER NOT NULL,
     hlc TEXT NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
--- 7. FSRS v5 Spaced Repetition Cards
 CREATE TABLE IF NOT EXISTS srs_cards (
-    id TEXT PRIMARY KEY,                      -- Deterministic hash or UUIDv7
+    id TEXT PRIMARY KEY,
     source_attempt_id TEXT,
-    card_type TEXT NOT NULL,                  -- 'pronunciation' | 'grammar_fix' | 'collocation' | 'vocabulary'
+    card_type TEXT NOT NULL,
     front_text TEXT NOT NULL,
     back_text TEXT NOT NULL,
     context_sentence TEXT,
     ipa_phonetic TEXT,
-    due_at INTEGER NOT NULL,                  -- Unix ms
+    due_at INTEGER NOT NULL,
     stability REAL NOT NULL DEFAULT 0,
     difficulty REAL NOT NULL DEFAULT 0,
     elapsed_days INTEGER NOT NULL DEFAULT 0,
     scheduled_days INTEGER NOT NULL DEFAULT 0,
     reps INTEGER NOT NULL DEFAULT 0,
     lapses INTEGER NOT NULL DEFAULT 0,
-    state INTEGER NOT NULL DEFAULT 0,         -- 0=New, 1=Learning, 2=Review, 3=Relearning
+    state INTEGER NOT NULL DEFAULT 0,
     last_review_at INTEGER,
     hlc TEXT NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
@@ -544,14 +699,13 @@ CREATE TABLE IF NOT EXISTS srs_cards (
 
 CREATE INDEX IF NOT EXISTS idx_srs_due ON srs_cards(is_deleted, due_at ASC);
 
--- 8. CRDT / HLC Sync Outbox Queue (Local Changes Pending Push to Cloudflare D1)
 CREATE TABLE IF NOT EXISTS sync_outbox (
-    hlc TEXT PRIMARY KEY,                     -- '<phys_ms_base36>-<counter_hex>-<device_id>'
-    table_name TEXT NOT NULL,                 -- 'study_sessions' | 'speaking_attempts' | 'writing_attempts' | 'receptive_attempts' | 'srs_cards'
+    hlc TEXT PRIMARY KEY,
+    table_name TEXT NOT NULL,
     row_id TEXT NOT NULL,
-    payload_json TEXT NOT NULL,               -- Full serialized row state at this HLC
+    payload_json TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    synced_at INTEGER                         -- NULL until acknowledged by Cloudflare Worker
+    synced_at INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_outbox_unsynced ON sync_outbox(synced_at) WHERE synced_at IS NULL;
@@ -559,175 +713,125 @@ CREATE INDEX IF NOT EXISTS idx_outbox_unsynced ON sync_outbox(synced_at) WHERE s
 
 ---
 
-## 7. Deterministic Export & Import System (Backup / Restore / Merge)
+## 8. Deterministic Export & Import System (Backup / Restore / CRDT Merge)
 
-Because a local-first user might never create an account (or might want an offline cold backup before switching browsers), the Export/Import system is a first-class feature.
+### 8.1 Export & Import State Machine (Mermaid)
 
-### 7.1 Two Export Formats
+```mermaid
+flowchart TD
+    START["User Opens Backup & Restore Modal"] --> ACTION{"Select Action"}
 
-1. **Format A: Compact Progress Backup (`.ieltsbackup` — gzipped JSON, ~100 KB – 2 MB)**
-   - Exports all rows from `study_sessions`, `speaking_attempts`, `writing_attempts`, `receptive_attempts`, and `srs_cards` (excluding binary `.opus` files).
-   - Includes a `manifest` with `schema_version`, `exported_at`, `device_id`, `max_hlc`, and a **SHA-256 integrity hash** of the canonicalized payload.
-   - Ideal for quick sharing, messaging to oneself, or transferring progress in $<1\text{ second}$.
+    ACTION -->|"Export"| EXP_TYPE{"Choose Export Format"}
+    EXP_TYPE -->|"Compact (.ieltsbackup)"| EXP_JSON["Serialize SQLite Tables to Canonical JSON<br/>Compute SHA-256 Checksum + GZIP via fflate<br/>Download (~100 KB - 2 MB)"]
+    EXP_TYPE -->|"Full Archive (.ielts-archive.zip)"| EXP_ZIP["Stream SQLite Binary + JSON Dump +<br/>OPFS /audio/attempts/*.opus via fflate<br/>Download Streaming ZIP"]
 
-2. **Format B: Full Studio Archive with Audio (`.ielts-archive.zip` — Streaming ZIP via `fflate`)**
-   - Built inside `db.worker.ts` without loading everything into RAM:
-     ```
-     ielts-backup-2026-11-04.ielts-archive.zip
-     ├── manifest.json                 (version, counts, sha256 manifest)
-     ├── db/
-     │   ├── ielts.sqlite3             (raw binary export via sqlite3_js_db_export)
-     │   └── canonical-dump.json       (schema-independent JSON dump for cross-version safety)
-     └── audio/
-         └── attempts/
-             ├── 0192f4a1-....opus
-             └── 0192f4b8-....opus
-     ```
+    ACTION -->|"Import"| IMP_READ["Read Dropped File in db.worker.ts<br/>Verify manifest.json & SHA-256 Integrity"]
+    IMP_READ --> VALID{"Checksum Valid?"}
+    VALID -->|"No"| ERR["Abort Import & Show Tamper/Corruption Error"]
+    VALID -->|"Yes"| MODE{"Choose Import Resolution Mode"}
 
-### 7.2 Three Import Modes
+    MODE -->|"Smart Merge (Default CRDT/HLC)"| MERGE["For each incoming row r:<br/>Compare r.hlc vs local.hlc<br/>If local is NULL or r.hlc > local.hlc -> UPSERT<br/>Copy missing .opus files to OPFS"]
+    MODE -->|"Clean Overwrite"| OVERWRITE["Replace OPFS /db/ielts.sqlite3 & /audio/*<br/>with Archive Snapshot"]
 
-When the user drops a `.ieltsbackup` or `.ielts-archive.zip` file into the app:
-1. **Verify Integrity**: Worker validates `manifest.json` schema version and verifies the SHA-256 checksum of every entry before touching the database.
-2. **User Chooses Resolution Mode**:
-   - **Smart Merge (Default & Recommended)**:
-     - For every row $r$ in the imported dump, compare its Hybrid Logical Clock `r.hlc` against the existing local row `local.hlc` (if `id` exists):
-       $$\text{if } \text{local} = \varnothing \lor r.\text{hlc} > \text{local}.\text{hlc} \implies \text{UPSERT } r$$
-     - Copies any missing `/audio/attempts/*.opus` files into OPFS.
-     - Zero data loss: combines yesterday's laptop sessions with today's phone sessions offline!
-   - **Clean Overwrite (Restore Snapshot)**:
-     - Replaces `/db/ielts.sqlite3` and `/audio/attempts/*` with the archive contents.
-
----
-
-## 8. Google OAuth 2.0 & Multi-Device Sync Protocol (Cloudflare Edge)
-
-### 8.1 Zero-Cost Google Authentication Flow (OIDC + PKCE)
-
-We do **not** need Firebase Auth, Auth0, or Supabase Auth (which introduce third-party SDK bloat or MAU limits). We use direct **Google OAuth 2.0 / OpenID Connect** verified at the edge by our Cloudflare Worker using Web Crypto (`crypto.subtle` + cached Google JWKS).
-
-```
-[Browser PWA]                               [Cloudflare Worker]                     [Google OAuth 2.0]
-      |                                              |                                      |
-      | 1. Click "Sign in with Google"               |                                      |
-      |    (Generate PKCE code_verifier & challenge) |                                      |
-      |--------------------------------------------->|                                      |
-      |                                              | 2. Redirect to accounts.google.com   |
-      |                                              |------------------------------------->|
-      |                                              |                                      |
-      | 3. User consents -> Redirects to /api/auth/google/callback?code=...                 |
-      |--------------------------------------------->|                                      |
-      |                                              | 4. POST /token (exchange code + PKCE)|
-      |                                              |------------------------------------->|
-      |                                              |<-------------------------------------|
-      |                                              |    Returns id_token (JWT)            |
-      |                                              |                                      |
-      |                                              | 5. Verify id_token signature via     |
-      |                                              |    cached Google JWKS + Upsert D1    |
-      |                                              |    `users` table                     |
-      |                                              |                                      |
-      | 6. Set HttpOnly, Secure, SameSite=Lax JWT    |                                      |
-      |    session cookie (30d) + return user profile|                                      |
-      |<---------------------------------------------|                                      |
+    MERGE --> DONE["Rebuild FSRS Queue & Refresh UI"]
+    OVERWRITE --> DONE
 ```
 
-#### Seamless Guest-to-Google Account Upgrade
-When a user who has already completed 20 practice sessions locally logs in with Google for the first time:
-1. `db.worker.ts` runs:
-   ```sql
-   UPDATE study_sessions SET user_id = :google_sub WHERE user_id IS NULL;
-   ```
-2. Every existing local record not yet in `sync_outbox` is enqueued into `sync_outbox`.
-3. `sync.worker.ts` immediately runs a **Push -> Pull** cycle, merging any historical data already stored in the user's Google cloud account with their current device's local OPFS data.
+### 8.2 Mathematical Guarantee of CRDT / HLC Smart Merge
+Let $S_{\text{local}}$ and $S_{\text{import}}$ be two database states (e.g., from a user's laptop and phone). Every mutable row $x$ identified by primary key $k$ carries a strictly totally ordered Hybrid Logical Clock timestamp $\text{hlc}(x)$. The merged state $S_{\text{merged}}$ for key $k$ is defined as a **Last-Write-Wins Element-Set (LWW-Element-Set) join-semilattice**:
+
+$$
+S_{\text{merged}}(k) = \begin{cases}
+S_{\text{local}}(k) & \text{if } k \notin S_{\text{import}} \\
+S_{\text{import}}(k) & \text{if } k \notin S_{\text{local}} \\
+S_{\text{import}}(k) & \text{if } \text{hlc}\big(S_{\text{import}}(k)\big) > \text{hlc}\big(S_{\text{local}}(k)\big) \\
+S_{\text{local}}(k) & \text{otherwise}
+\end{cases}
+$$
+
+Because this join operation $\sqcup$ is **commutative** ($A \sqcup B = B \sqcup A$), **associative** ($(A \sqcup B) \sqcup C = A \sqcup (B \sqcup C)$), and **idempotent** ($A \sqcup A = A$), importing the same backup file multiple times or merging across 3+ devices is mathematically guaranteed never to duplicate or lose progress.
 
 ---
 
-### 8.2 Hybrid Logical Clock (HLC) & Conflict-Free Sync Protocol
+## 9. Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)
 
-#### Why Hybrid Logical Clocks?
-If a user practices on their phone (whose clock is 2 minutes behind) and on their laptop, naive `updated_at` timestamps cause data corruption.
-Every mutation in `db.worker.ts` stamps rows with a **Hybrid Logical Clock** string:
-$$\text{HLC} = \texttt{<48-bit physical ms in padded base36>}-\texttt{<16-bit logical counter in hex>}-\texttt{<8-char device\_id>}$$
-Example: `01jbx9k2m0-0001-a8f39c12`.
-- Lexicographically sortable in SQLite (`WHERE hlc > ? ORDER BY hlc ASC`)!
-- Strictly monotonic on both client and server.
+### 9.1 Sequence Diagram: Google Login (PKCE), Guest Data Claim & HLC Delta Sync
 
-#### Cloudflare D1 Schema (`workers/api/migrations/0001_init.sql`)
-Instead of duplicating complex relational migrations on both client and server, **Cloudflare D1 stores a normalized User Table + an Append/Upsert Entity Sync Store (`sync_entities`)**:
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant PWA as Browser UI + db.worker.ts
+    participant SyncW as sync.worker.ts
+    participant CFW as Cloudflare Worker (Hono)
+    participant Google as Google OAuth 2.0 (OIDC)
+    participant D1 as Cloudflare D1 (SQLite)
+    participant R2 as Cloudflare R2 (Opus Audio)
 
-```sql
-CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,                      -- Google 'sub' claim
-    email TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    picture_url TEXT,
-    audio_bytes_used INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL,
-    last_sync_at INTEGER NOT NULL
-);
+    Note over User,PWA: User practices offline as Guest (20 sessions in OPFS)
+    User->>PWA: Click "Sign in with Google to Sync"
+    PWA->>PWA: Generate PKCE code_verifier & code_challenge (S256)
+    PWA->>CFW: GET /api/auth/google/login?code_challenge=...
+    CFW-->>Google: 302 Redirect to accounts.google.com/o/oauth2/v2/auth
+    User->>Google: Consent & Authenticate
+    Google-->>CFW: GET /api/auth/google/callback?code=...
+    CFW->>Google: POST /token (exchange code + code_verifier)
+    Google-->>CFW: Return signed id_token (JWT)
+    CFW->>CFW: Verify JWT via cached Google JWKS (crypto.subtle)
+    CFW->>D1: UPSERT INTO users (id, email, name, picture_url)
+    CFW-->>PWA: Set HttpOnly Secure Session Cookie + Return User Profile
 
--- Stores latest state of every synced entity row per user, indexed by HLC for fast delta pulls!
-CREATE TABLE IF NOT EXISTS sync_entities (
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    table_name TEXT NOT NULL,                 -- 'study_sessions' | 'speaking_attempts' | 'writing_attempts' | 'receptive_attempts' | 'srs_cards'
-    row_id TEXT NOT NULL,
-    hlc TEXT NOT NULL,
-    device_id TEXT NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0,
-    payload_json TEXT NOT NULL,               -- Compressed/canonical JSON of the row
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (user_id, table_name, row_id)
-);
+    Note over PWA,SyncW: Claim Guest Data & Perform First Bidirectional Sync
+    PWA->>PWA: UPDATE study_sessions SET user_id = google_sub WHERE user_id IS NULL
+    PWA->>SyncW: Trigger syncNow()
+    SyncW->>PWA: Read unsynced rows from sync_outbox (batch <= 200)
+    SyncW->>CFW: POST /api/sync/push { changes: [...] }
+    CFW->>D1: Batch INSERT INTO sync_entities ... ON CONFLICT DO UPDATE WHERE excluded.hlc > sync_entities.hlc
+    CFW-->>SyncW: 200 OK { ack_hlc }
+    SyncW->>PWA: Mark sync_outbox rows as synced
 
--- Covering index so delta pull `WHERE user_id = ? AND hlc > ?` reads ONLY changed rows!
-CREATE INDEX IF NOT EXISTS idx_sync_pull ON sync_entities(user_id, hlc ASC);
+    SyncW->>CFW: GET /api/sync/pull?since_hlc={last_sync_hlc}
+    CFW->>D1: SELECT * FROM sync_entities WHERE user_id = ? AND hlc > ? ORDER BY hlc ASC
+    D1-->>CFW: Return delta rows from other devices
+    CFW-->>SyncW: 200 OK { deltas: [...], server_max_hlc }
+    SyncW->>PWA: Apply LWW-HLC Upsert into local SQLite-WASM & update last_sync_hlc
+
+    opt Optional Audio Recording Sync (Content-Addressed by SHA-256)
+        SyncW->>CFW: PUT /api/audio/{sha256} (audio/webm;codecs=opus)
+        CFW->>D1: Check user audio quota (prune oldest blob if > 25 MB)
+        CFW->>R2: env.AUDIO_BUCKET.put(key, stream)
+        CFW-->>SyncW: 201 Created
+    end
 ```
 
-#### Why the `sync_entities` Pattern in D1 is Genius for Cloudflare Free Tier:
-1. **Zero Server-Side Schema Drift**: When we add a new metric column to `speaking_attempts` in SQLite-WASM on the client, D1 requires **zero migrations** because `payload_json` holds the serialized row.
-2. **Minimal D1 Row Reads/Writes**:
-   - **Push (`POST /api/sync/push`)**: Uses D1 batch `INSERT INTO sync_entities ... ON CONFLICT(user_id, table_name, row_id) DO UPDATE SET hlc = excluded.hlc, payload_json = excluded.payload_json WHERE excluded.hlc > sync_entities.hlc`.
-   - **Pull (`GET /api/sync/pull?since_hlc=...`)**: Runs `SELECT table_name, row_id, hlc, is_deleted, payload_json FROM sync_entities WHERE user_id = ? AND hlc > ? ORDER BY hlc ASC LIMIT 500`.
-   - If 0 rows changed on other devices, the query reads **0 rows** via the `idx_sync_pull` index!
+### 9.2 Hybrid Logical Clock (HLC) Format
+Every local or remote mutation is stamped with a fixed-width, lexicographically sortable HLC string:
 
-#### Sync Trigger Policy (Minimizing Worker Requests)
-`sync.worker.ts` does **not** poll continuously. It triggers a sync cycle only on:
-1. App boot (if logged in & online, max once per 5 minutes).
-2. Completion of an Exam Session or SRS Review batch (debounced by 3 seconds).
-3. `window.addEventListener('online')` after recovering from offline mode.
-4. Manual "Sync Now" button click in the top bar.
+$$
+\text{HLC} = \underbrace{\texttt{01jbx9k2m0}}_{\text{48-bit physical ms (base36)}} - \underbrace{\texttt{0001}}_{\text{16-bit logical counter (hex)}} - \underbrace{\texttt{a8f39c12}}_{\text{32-bit device ID}}
+$$
 
 ---
 
-### 8.3 Optional Audio Blob Sync with Cloudflare R2 + Automatic Quota Pruning
+## 10. Cloudflare Free-Tier Capacity Math & Cost Guardrails
 
-- Opus audio @ 24 kbps is tiny (~180 KB per 1-minute response, ~900 KB for a full 5-minute Speaking session).
-- Users have a setting: **"Sync Speaking Recordings Across Devices"** (`ON` by default for last 25 MB of audio per user, or `Metadata & Transcripts Only`).
-- **Ring-Buffer Quota Guardrail**: Each user gets a 25 MB R2 audio quota (roughly 125 minutes of speaking recordings). When uploading a new recording that would exceed 25 MB for that `user_id`, the Worker automatically deletes the oldest R2 audio object for that user while keeping the transcript, word timestamps, and band scores forever in D1 and local OPFS!
+All heavy compute (ASR, pitch DSP, grammar checking, semantic embeddings, and SQLite queries) executes on the **client device**. Cloudflare only verifies Google OAuth tokens and stores tiny compressed JSON deltas.
 
----
-
-## 9. Cloudflare Free-Tier Capacity Math & Cost Guardrails
-
-Let's verify mathematically that this architecture stays 100% within Cloudflare's $0 Free Plan limits:
-
-| Cloudflare Resource | Free Tier Limit | Usage Per Active User / Day | Max Free DAU Supported |
+| Cloudflare Service | Free Tier Limit | Usage per Active Logged-In User / Day | Maximum Free DAU Supported |
 | :--- | :--- | :--- | :--- |
-| **Cloudflare Pages** | Unlimited static requests & bandwidth | Static HTML/JS/CSS/Questions | **Unlimited** |
-| **Cloudflare Workers** | **100,000 requests / day** | ~6 requests/day (1 pull on open, 3 pushes after practice, 2 audio puts) | **~16,500 DAU** (Logged-in users; anonymous users use 0 Worker requests!) |
-| **Cloudflare D1 Reads** | **5,000,000 rows read / day** | ~15 rows read per delta pull (indexed by `user_id, hlc`) | **~330,000 DAU** |
-| **Cloudflare D1 Writes** | **100,000 rows written / day** | ~10 rows written per active study day (1 session + 3 speaking + 6 SRS cards) | **~10,000 DAU** |
-| **Cloudflare D1 Storage** | **5 GB total** | ~3 KB per attempt $\times$ 100 attempts = ~300 KB/user | **~16,000 heavy users** |
-| **Cloudflare R2 Storage** | **10 GB / month** (0 egress fee) | Capped at 20–25 MB per opted-in user | **400–500 full audio-sync users** (or 100% unlimited if audio stays local-only) |
-
-> **Hard Cost Guardrail**: Because Cloudflare Workers + D1 Free Plan does **not** auto-bill overages without upgrading to Paid, your credit card can never be surprise-charged. Furthermore, if Worker/D1 daily quota ever hits 100%, the client app continues working 100% normally in Local-First mode and simply flushes `sync_outbox` the next day!
+| **Cloudflare Pages** | Unlimited static requests & bandwidth | Static SPA + Question Packs | **Unlimited** |
+| **Cloudflare Workers** | $100,000\text{ requests / day}$ | $\approx 6\text{ requests/day}$ ($1\text{ pull} + 3\text{ pushes} + 2\text{ audio puts}$) | **$\approx 16,500\text{ DAU}$** (Guest users consume $0$ requests!) |
+| **Cloudflare D1 Reads** | $5,000,000\text{ rows / day}$ | $\approx 15\text{ rows/day}$ (indexed by `(user_id, hlc)`) | **$\approx 330,000\text{ DAU}$** |
+| **Cloudflare D1 Writes** | $100,000\text{ rows / day}$ | $\approx 10\text{ rows/day}$ ($1\text{ session} + 3\text{ attempts} + 6\text{ SRS cards}$) | **$\approx 10,000\text{ DAU}$** |
+| **Cloudflare D1 Storage** | $5\text{ GB total}$ | $\approx 300\text{ KB}$ per user ($100$ full attempts) | **$\approx 16,000\text{ heavy users}$** |
+| **Cloudflare R2 Storage** | $10\text{ GB / month}$ ($0$ egress fee) | Capped at $25\text{ MB}$ per user via ring-buffer | **$400\text{--}500\text{ full-audio-sync users}$** (Unlimited for transcript/score sync) |
 
 ---
 
-## 10. Security, Privacy & Cross-Origin Isolation
+## 11. Security, Privacy & Cross-Origin Isolation
 
-### 10.1 Required HTTP Headers (`public/_headers` on Cloudflare Pages)
-
-To unlock **multi-threaded WASM (`SharedArrayBuffer`)** for ONNX Runtime Web and Whisper WASM, the site must be Cross-Origin Isolated. We use `COEP: credentialless` instead of `require-corp` so Google OAuth profile pictures and HuggingFace Hub model fetches work without CORS breakage:
+### 11.1 Cross-Origin Isolation Headers (`apps/web/public/_headers`)
+To enable multi-threaded WebAssembly (`SharedArrayBuffer` for ONNX Runtime Web) while keeping Google OAuth popups/redirects and CDN model downloads working seamlessly:
 
 ```text
 /*
@@ -737,118 +841,35 @@ To unlock **multi-threaded WASM (`SharedArrayBuffer`)** for ONNX Runtime Web and
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: microphone=(self), camera=()
 ```
-*(Note: `same-origin-allow-popups` or a top-level redirect flow for Google OAuth ensures both OAuth login and `SharedArrayBuffer` coexist cleanly).*
-
-### 10.2 Optional Client-Side Encryption (E2EE Sync Passphrase)
-- Because `sync_entities.payload_json` is opaque to the Cloudflare Worker, users can optionally set an **End-to-End Encryption Passphrase** (derived via `PBKDF2-SHA256` / `AES-256-GCM` in Web Crypto API) so even Cloudflare D1 and R2 only ever see encrypted ciphertext!
 
 ---
 
-## 11. Repository Structure & Monorepo Layout
+## 12. Monorepo Structure & Phased Implementation Roadmap
 
-```text
-ielts/
-├── megaplan.md                         # This comprehensive system design document
-├── README.md                           # Project overview & quickstart
-├── package.json                        # Bun / pnpm workspace root
-├── tsconfig.base.json
-├── apps/
-│   └── web/                            # Frontend PWA (React 19 + Vite + Tailwind v4)
-│       ├── public/
-│       │   ├── _headers                # Cloudflare Pages COOP/COEP headers
-│       │   ├── manifest.webmanifest    # PWA installable manifest
-│       │   └── data/
-│       │       ├── cefr-lexicon.json   # Compact CEFR A1-C2 + AWL dictionary
-│       │       ├── collocations.json   # 6,500+ IELTS idioms & collocations
-│       │       └── questions/          # Static question packs (Speaking, Writing, Reading, Listening)
-│       ├── src/
-│       │   ├── main.tsx
-│       │   ├── routes/                 # TanStack Router pages
-│       │   │   ├── index.tsx           # Dashboard, Band Estimator, Streak & Sync Status
-│       │   │   ├── speaking/           # Mock Simulator, Part 1/2/3 Drill, Post-Test Diagnostic UI
-│       │   │   ├── writing/            # Task 1 & 2 Split Editor + Inline Diff Feedback
-│       │   │   ├── reading/            # 3-Passage Annotator + 14 Question Types
-│       │   │   ├── listening/          # Multi-part Audio Player + Normalizer Grading
-│       │   │   ├── review/             # FSRS v5 Flashcard Deck (Pronunciation + Grammar + Vocab)
-│       │   │   └── settings/           # AI Model Manager, Export/Import Backup, Google Sync
-│       │   ├── workers/
-│       │   │   ├── db.worker.ts        # SQLite-WASM OPFS + FSRS + Export/Import + CRDT Merge
-│       │   │   ├── audio-dsp.worker.ts # Silero VAD + Pitch (F0) + nPVI Rhythm + Opus Encoder
-│       │   │   ├── ai-scorer.worker.ts # Whisper ONNX + Wav2Vec2 GOP + harper.js + WebLLM + Kokoro TTS
-│       │   │   └── sync.worker.ts      # HLC Generator + Delta Push/Pull + R2 Audio Sync
-│       │   ├── worklets/
-│       │   │   └── pcm-processor.ts    # 16kHz Float32 ring buffer AudioWorklet
-│       │   └── lib/
-│       │       ├── scoring/            # Pure TypeScript mathematical rubric formulas (FC, LR, GRA, P)
-│       │       ├── hlc/                # Hybrid Logical Clock implementation
-│       │       └── backup/             # fflate ZIP/JSON export & SHA-256 verification
-│       └── vite.config.ts
-├── packages/
-│   ├── dsp-wasm/                       # Optional Rust -> WASM crate for ultra-fast pYIN pitch & nPVI
-│   └── shared/                         # Shared Zod schemas & TypeScript types between Web & Worker
-└── workers/
-    └── api/                            # Cloudflare Worker (Hono + D1 + R2 + Google OIDC)
-        ├── wrangler.toml
-        ├── migrations/
-        │   └── 0001_init.sql
-        └── src/
-            ├── index.ts
-            ├── auth/
-            │   └── google-oidc.ts      # PKCE exchange + Google JWKS verification + JWT cookie
-            └── sync/
-                ├── delta-sync.ts       # D1 HLC upsert & cursor pull
-                └── audio-r2.ts         # Content-addressed R2 upload/download with 25MB ring quota
+### 12.1 Repository Layout (Mermaid)
+
+```mermaid
+flowchart LR
+    ROOT["ielts/ (Monorepo Root)"] --> WEB["apps/web/<br/>React 19 + Vite + Tailwind v4 PWA"]
+    ROOT --> SHARED["packages/shared/<br/>Zod Schemas, HLC, Band Rounding & Rubrics"]
+    ROOT --> DSP["packages/dsp-wasm/<br/>pYIN Pitch & nPVI Rhythm Algorithms"]
+    ROOT --> API["workers/api/<br/>Cloudflare Worker (Hono + D1 + R2 + Google OIDC)"]
+
+    WEB --> W_WORKERS["src/workers/<br/>- db.worker.ts<br/>- audio-dsp.worker.ts<br/>- ai-scorer.worker.ts<br/>- sync.worker.ts"]
+    WEB --> W_BANK["public/data/<br/>- questions/*.json (Pre-generated Bank)<br/>- cefr-lexicon.json<br/>- collocations.json"]
 ```
 
----
+### 12.2 Phased Implementation Roadmap
 
-## 12. Phased Implementation Roadmap & TDD Verification Plan
-
-### Phase 1: Foundation, Local-First DB & Export/Import Engine
-- **Deliverables**:
-  - Scaffold monorepo (`apps/web`, `packages/shared`, `workers/api`).
-  - Implement Hybrid Logical Clock (`hlc.ts`) with unit tests proving monotonicity and causal ordering.
-  - Implement `db.worker.ts` with `@sqlite.org/sqlite-wasm` over OPFS, running `schema.sql`.
-  - Build the **Export / Import Backup Engine** (`.ieltsbackup` JSON.gz and `.ielts-archive.zip` via `fflate`) with **Smart CRDT Merge** and **Clean Overwrite** modes.
-- **Verification**:
-  - Vitest suite verifying HLC collision handling, deterministic CRDT merge of two divergent databases, and SHA-256 tamper rejection on corrupted backup files.
-
-### Phase 2: Audio Pipeline & IELTS Speaking Auto-Scoring Engine (Core Differentiator)
-- **Deliverables**:
-  - Build `pcm-processor.ts` (`AudioWorklet`) + simultaneous `MediaRecorder` Opus saver to OPFS.
-  - Build `audio-dsp.worker.ts`: Silero VAD v5 integration (detecting exact speech/silence timestamps, mid-clause pauses vs clause-boundary pauses), YIN pitch ($F_0$ semitone variance), and nPVI rhythm calculator.
-  - Build `ai-scorer.worker.ts`:
-    - Integrate `@huggingface/transformers` Whisper (`whisper-base.en` / `whisper-tiny.en`) with verbatim disfluency prompt and word-level timestamps.
-    - Implement the 4 deterministic scoring calculators (`scoreFluencyCoherence`, `scoreLexicalResource`, `scoreGrammaticalRangeAccuracy`, `scorePronunciation`) + official IELTS half-band rounding.
-    - Integrate `harper.js` WASM for instant offline grammatical error detection + embedded CEFR/AWL lexicon & Aho-Corasick collocation matcher.
-    - Integrate progressive WebLLM (`Qwen2.5-1.5B-Instruct-q4f16_1-MLC`) for deep semantic coherence feedback and Band-9 sentence rewrites, plus Kokoro/Piper TTS for the AI Examiner voice.
-- **Verification**:
-  - Automated benchmark tests against synthetic and sample IELTS Band 5.0, 6.5, and 8.5 transcripts/audio fixtures verifying that:
-    - Mid-clause pauses and high disfluency rates lower $B_{\text{FC}}$.
-    - High C1/C2 lexical density and high MTLD raise $B_{\text{LR}}$.
-    - High Error-Free Clause ratio ($\text{EFC} > 0.85$) and subordinate clauses raise $B_{\text{GRA}}$.
-    - Monotone pitch ($\sigma_{F_0,\text{ST}} < 1.5$) or low Whisper word confidence lowers $B_{\text{P}}$.
-
-### Phase 3: Speaking Simulator UI & Diagnostic Dashboard
-- **Deliverables**:
-  - **AI Model Manager UI**: Progressive download cards with pause/resume, cache size inspector, and 1-click model clear.
-  - **Full Mock Test Room**: Examiner TTS avatar/waveform, Part 1 timed Q&A, Part 2 Cue Card with 1-min preparation notepad + 2-min countdown, Part 3 abstract discussion.
-  - **Interactive Diagnostic Report**:
-    - Word-by-word interactive transcript (click any word to play that exact audio slice!).
-    - Color-coded badges for `[0.8s pause]`, `[filler: um]`, `[C1 collocation]`, `[grammar fix]`, and `[low pronunciation confidence]`.
-    - Pitch contour graph & 4-pillar Band Score breakdown card.
-
-### Phase 4: Writing, Reading, Listening & FSRS v5 Modules
-- **Deliverables**:
-  - **Writing Lab**: Task 1 (with SVG charts) & Task 2 split-screen editor, live word count, timer, local 4-criterion rubric grading, and inline sentence diff critique.
-  - **Reading & Listening Simulators**: Split-pane passage annotator, all 14 question types, spelling/number answer normalizer, and raw-to-band conversion tables.
-  - **FSRS v5 Flashcard Deck**: Automatic card extraction from Speaking/Writing errors + daily review queue.
-
-### Phase 5: Cloudflare Edge Worker, Google OAuth & Multi-Device Sync
-- **Deliverables**:
-  - Implement `workers/api` with Hono, D1 (`0001_init.sql`), and R2 bindings.
-  - Implement Google OAuth 2.0 PKCE + JWKS verification (`/api/auth/google/login`, `/api/auth/google/callback`, `/api/auth/me`, `/api/auth/logout`).
-  - Implement `/api/sync/push` and `/api/sync/pull` with HLC conflict resolution and Guest-to-Authenticated local data migration.
-  - Implement `/api/audio/:sha256` with 25 MB per-user ring-buffer pruning on R2.
-- **Verification**:
-  - Miniflare / Wrangler local integration tests verifying multi-device sync (Device A pushes offline attempts $\to$ Device B pulls delta $\to$ states converge identically).
+1. **Phase 1: Core Foundation, HLC, SQLite-WASM OPFS & Backup Engine**
+   - Initialize workspace (`apps/web`, `packages/shared`, `workers/api`).
+   - Implement Hybrid Logical Clock (`hlc.ts`), SQLite-WASM OPFS schema (`schema.sql`), and deterministic `.ieltsbackup` / `.ielts-archive.zip` Export & CRDT Smart Merge Import.
+2. **Phase 2: Pre-Generated Question Bank & Deterministic Speaking/Writing Scorers**
+   - Seed curated Speaking (Part 1/2/3), Writing (Task 1 SVG charts + Task 2), Reading, and Listening question packs with pre-computed semantic anchors and target collocations.
+   - Implement the 4 mathematical scoring engines ($\text{FC}, \text{LR}, \text{GRA}, \text{P}$) + official half-band rounding + unit tests.
+3. **Phase 3: Real-Time Audio Worklet, VAD, Prosody DSP & Whisper/Wav2Vec2 Worker**
+   - Wire `AudioWorkletProcessor` ($16\text{ kHz}$ PCM) + `MediaRecorder` (Opus to OPFS) + Silero VAD v5 + Pitch/nPVI DSP + Whisper ONNX + `harper.js` + `bge-small-en-v1.5`.
+4. **Phase 4: Interactive Exam Simulators & FSRS v5 Review Deck UI**
+   - Build Speaking Mock Room (with clickable word-timestamp replay & pitch contour visualization), Writing Split-Editor, Reading 3-Pane Annotator, Listening Player, and FSRS v5 Flashcard UI.
+5. **Phase 5: Cloudflare Edge Worker, Google OAuth 2.0 & Multi-Device Delta Sync**
+   - Implement Hono Worker endpoints (`/api/auth/google/*`, `/api/sync/push`, `/api/sync/pull`, `/api/audio/:sha256`), D1 migrations, R2 ring-buffer quota enforcement, and end-to-end sync tests.
