@@ -552,6 +552,11 @@ export const FeaturesPage: React.FC = () => {
     (cfg) => packStates[cfg.id]?.status === 'ready' || packStates[cfg.id]?.status === 'downloading'
   )
 
+  const totalQuotaMb = Math.max(
+    1024,
+    Number(dbMb) + Number(audMb) + Number(modMb) + Number(freeGb) * 1024
+  )
+
   const handleDownloadAll = () => {
     PACK_CONFIGS.forEach((cfg) => {
       if (packStates[cfg.id]?.status !== 'ready' && packStates[cfg.id]?.status !== 'downloading') {
@@ -588,24 +593,24 @@ export const FeaturesPage: React.FC = () => {
         <div className="w-full h-3 rounded-full bg-[#F4F0EA] overflow-hidden flex">
           <div
             style={{
-              width: Number(dbMb) === 0 ? '0%' : `${(Number(dbMb) / 400) * 100}%`,
-              minWidth: Number(dbMb) > 0 ? '3px' : '0px',
+              width: Number(dbMb) === 0 ? '0%' : `${(Number(dbMb) / totalQuotaMb) * 100}%`,
+              minWidth: Number(dbMb) > 0 ? '2px' : '0px',
             }}
             className="bg-[#1E3A5F] h-full transition-all duration-300"
             title={`Study History: ${dbMb} MB`}
           />
           <div
             style={{
-              width: Number(audMb) === 0 ? '0%' : `${(Number(audMb) / 400) * 100}%`,
-              minWidth: Number(audMb) > 0 ? '3px' : '0px',
+              width: Number(audMb) === 0 ? '0%' : `${(Number(audMb) / totalQuotaMb) * 100}%`,
+              minWidth: Number(audMb) > 0 ? '2px' : '0px',
             }}
             className="bg-[#9A3412] h-full transition-all duration-300"
             title={`Voice Recordings: ${audMb} MB`}
           />
           <div
             style={{
-              width: Number(modMb) === 0 ? '0%' : `${(Number(modMb) / 400) * 100}%`,
-              minWidth: Number(modMb) > 0 ? '3px' : '0px',
+              width: Number(modMb) === 0 ? '0%' : `${(Number(modMb) / totalQuotaMb) * 100}%`,
+              minWidth: Number(modMb) > 0 ? '2px' : '0px',
             }}
             className="bg-[#1E4631] h-full transition-all duration-300"
             title={`AI Models: ${modMb} MB`}
