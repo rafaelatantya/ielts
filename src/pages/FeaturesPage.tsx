@@ -363,7 +363,7 @@ export const FeaturesPage: React.FC = () => {
 
     setPackStates((prev) => {
       const current = prev[packId]
-      const nextChunkStates = current.chunkStates.map((st, i) =>
+      const nextChunkStates = current.chunkStates.map((_, i) =>
         i < current.downloadedChunks ? 'verified' : 'pending'
       )
       const next: PackRuntimeState = {
