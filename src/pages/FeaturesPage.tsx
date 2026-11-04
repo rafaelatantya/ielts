@@ -19,7 +19,6 @@ interface ModelPackConfig {
   totalChunks: number
   sizeBadge: string
   description: string
-  features: string[]
 }
 
 const PACK_CONFIGS: ModelPackConfig[] = [
@@ -30,14 +29,7 @@ const PACK_CONFIGS: ModelPackConfig[] = [
     sizeMb: 6.1,
     totalChunks: 2,
     sizeBadge: '6.1 MB (2 Chunks)',
-    description:
-      'Unlocks harper.js WASM grammar checker, 15,000-word CEFR/AWL lexicon, 6,500-collocation trie, and QWK Band Calibrator.',
-    features: [
-      'harper.js WASM grammar linter',
-      '15,000-word Oxford CEFR + AWL SQLite lexicon',
-      '6,500-phrase Aho-Corasick Collocation Trie',
-      'Stage 2 LightGBM Psychometric Band Calibrator (0.4 MB)',
-    ],
+    description: 'Fast grammar and vocabulary checker for essays.',
   },
   {
     id: 'tier2',
@@ -46,13 +38,7 @@ const PACK_CONFIGS: ModelPackConfig[] = [
     sizeMb: 76.2,
     totalChunks: 19,
     sizeBadge: '76.2 MB (19 Chunks × 4 MiB)',
-    description:
-      'Unlocks verbatim Whisper-base.en ASR, word timestamps, Silero VAD v5 pause classifier, and Rust pYIN Pitch/nPVI Prosody DSP.',
-    features: [
-      'Whisper-base.en ONNX (verbatim transcription + word timestamps + confidence posteriors)',
-      'Silero VAD v5 (30 ms pause classifier)',
-      'Rust pYIN DSP (F0 semitone intonation & nPVI rhythm)',
-    ],
+    description: 'Speech recognition, fluency tracking, and speaking scoring engine.',
   },
   {
     id: 'tier3',
@@ -61,13 +47,7 @@ const PACK_CONFIGS: ModelPackConfig[] = [
     sizeMb: 116.0,
     totalChunks: 29,
     sizeBadge: '116.0 MB (29 Chunks × 4 MiB)',
-    description:
-      'Unlocks Wav2Vec2-CTC + SpeechOcean762 GOPT phoneme aligner, Indonesian L1 transfer detector, Flan-T5-GEC / DeBERTa-GED grammar rewriter, and Cue Card bullet entailment.',
-    features: [
-      'Wav2Vec2-CTC + SpeechOcean762 GOPT (36 MB) for per-phoneme IPA Goodness of Pronunciation and Indonesian L1 transfer diagnosis (/θ/ -> /t/, missing -ed/-s)',
-      'Flan-T5-small-GEC + DeBERTa-GED (55 MB) for Cambridge BEA-2019 ERRANT grammar diffs',
-      'DeBERTa-v3-xsmall Cross-Encoder (25 MB) for Cue Card bullet-point coverage verification',
-    ],
+    description: 'Detailed pronunciation and sentence grammar analysis.',
   },
   {
     id: 'tts',
@@ -76,11 +56,7 @@ const PACK_CONFIGS: ModelPackConfig[] = [
     sizeMb: 80.0,
     totalChunks: 20,
     sizeBadge: '80.0 MB (20 Chunks × 4 MiB)',
-    description:
-      'Unlocks British, Australian, and US neural examiner voices for offline Speaking Parts 1–3.',
-    features: [
-      'Natural British, Australian, and North American offline neural TTS voices for Speaking Parts 1–3 and additional Listening drills (falls back to built-in Web Speech synthesis / pre-packaged compressed clips if not downloaded)',
-    ],
+    description: 'Natural British, Australian, and US examiner voices for offline practice.',
   },
 ]
 
@@ -431,6 +407,21 @@ export const FeaturesPage: React.FC = () => {
     }, 1200)
   }
 
+  const allDownloaded = PACK_CONFIGS.every(
+    (cfg) => packStates[cfg.id]?.status === 'ready'
+  )
+  const allDownloadingOrReady = PACK_CONFIGS.every(
+    (cfg) => packStates[cfg.id]?.status === 'ready' || packStates[cfg.id]?.status === 'downloading'
+  )
+
+  const handleDownloadAll = () => {
+    PACK_CONFIGS.forEach((cfg) => {
+      if (packStates[cfg.id]?.status !== 'ready' && packStates[cfg.id]?.status !== 'downloading') {
+        startDownloadSimulation(cfg.id)
+      }
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -500,48 +491,75 @@ export const FeaturesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* CDN & Concurrency Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border-subtle">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="feat-cdn-select"
-              className="font-sans text-[13px] font-medium text-primary"
-            >
-              CDN Mirror Priority:
-            </label>
-            <select
-              id="feat-cdn-select"
-              value={cdnMirror}
-              onChange={(e) => handleCdnChange(e.target.value)}
-              className="font-sans text-xs bg-white text-primary border border-[#C7BFA8] rounded-sm px-3 py-2 focus:ring-1 focus:ring-accent-navy focus:outline-none"
-            >
-              <option value="Auto Multi-Mirror (HuggingFace LFS + Cloudflare Edge)">
-                Auto Multi-Mirror (HuggingFace LFS + Cloudflare Edge)
-              </option>
-              <option value="Cloudflare R2 Edge Cache (SEA/Jakarta PoP)">
-                Cloudflare R2 Edge Cache (SEA/Jakarta PoP)
-              </option>
-              <option value="HuggingFace Hub Global CDN">HuggingFace Hub Global CDN</option>
-            </select>
+        {/* CDN & Concurrency Selectors + Download All */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pt-3 border-t border-border-subtle">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="feat-cdn-select"
+                className="font-sans text-[13px] font-medium text-primary"
+              >
+                CDN Mirror Priority:
+              </label>
+              <select
+                id="feat-cdn-select"
+                value={cdnMirror}
+                onChange={(e) => handleCdnChange(e.target.value)}
+                className="font-sans text-xs bg-white text-primary border border-[#C7BFA8] rounded-sm px-3 py-2 focus:ring-1 focus:ring-accent-navy focus:outline-none"
+              >
+                <option value="Auto Multi-Mirror (HuggingFace LFS + Cloudflare Edge)">
+                  Auto Multi-Mirror (HuggingFace LFS + Cloudflare Edge)
+                </option>
+                <option value="Cloudflare R2 Edge Cache (SEA/Jakarta PoP)">
+                  Cloudflare R2 Edge Cache (SEA/Jakarta PoP)
+                </option>
+                <option value="HuggingFace Hub Global CDN">HuggingFace Hub Global CDN</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="feat-streams-select"
+                className="font-sans text-[13px] font-medium text-primary"
+              >
+                Multi-Point Streams:
+              </label>
+              <select
+                id="feat-streams-select"
+                value={parallelStreams}
+                onChange={(e) => handleStreamsChange(Number(e.target.value))}
+                className="font-sans text-xs bg-white text-primary border border-[#C7BFA8] rounded-sm px-3 py-2 focus:ring-1 focus:ring-accent-navy focus:outline-none"
+              >
+                <option value={4}>4 Parallel Streams (Recommended)</option>
+                <option value={6}>6 Parallel Streams (Fast Wi-Fi)</option>
+                <option value={1}>1 Stream (Cellular / Data Saver)</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="feat-streams-select"
-              className="font-sans text-[13px] font-medium text-primary"
-            >
-              Multi-Point Streams:
-            </label>
-            <select
-              id="feat-streams-select"
-              value={parallelStreams}
-              onChange={(e) => handleStreamsChange(Number(e.target.value))}
-              className="font-sans text-xs bg-white text-primary border border-[#C7BFA8] rounded-sm px-3 py-2 focus:ring-1 focus:ring-accent-navy focus:outline-none"
-            >
-              <option value={4}>4 Parallel Streams (Recommended)</option>
-              <option value={6}>6 Parallel Streams (Fast Wi-Fi)</option>
-              <option value={1}>1 Stream (Cellular / Data Saver)</option>
-            </select>
+          <div className="lg:shrink-0 flex items-center">
+            {allDownloaded ? (
+              <button
+                type="button"
+                id="feat-download-all-btn"
+                disabled
+                className="w-full lg:w-auto font-sans text-xs font-semibold px-5 py-2.5 bg-[#EAF3EC] text-[#166534] border border-[#166534] rounded-sm shadow-xs flex items-center justify-center gap-1.5 cursor-default"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#166534]" />
+                All Models Downloaded ✓
+              </button>
+            ) : (
+              <button
+                type="button"
+                id="feat-download-all-btn"
+                onClick={handleDownloadAll}
+                disabled={allDownloadingOrReady}
+                className="w-full lg:w-auto font-sans text-xs font-semibold px-5 py-2.5 bg-[#9A3412] hover:bg-[#832b0e] text-white rounded-sm shadow-sm transition-colors cursor-pointer disabled:opacity-75 disabled:cursor-wait flex items-center justify-center gap-2"
+              >
+                <span>📦</span>
+                Download All AI Models (278.3 MB)
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -586,16 +604,6 @@ export const FeaturesPage: React.FC = () => {
                   <span className="font-mono text-xs font-medium px-2.5 py-1 bg-[#F4F0EA] border border-border-subtle rounded-sm text-primary shrink-0 tabular-nums">
                     {cfg.sizeBadge}
                   </span>
-                </div>
-
-                {/* Unlocked Features List */}
-                <div className="bg-[#FBF9F5] rounded-sm p-3 border border-border-subtle text-xs space-y-1.5">
-                  <div className="font-semibold text-primary font-sans">Unlocked Features:</div>
-                  <ul className="list-disc list-inside space-y-1 text-secondary font-sans leading-relaxed">
-                    {cfg.features.map((f, i) => (
-                      <li key={i}>{f}</li>
-                    ))}
-                  </ul>
                 </div>
 
                 {/* 19-Chunk (or N-Chunk) Visual Matrix & Telemetry */}

@@ -548,15 +548,12 @@ export const AccountPage: React.FC = () => {
         )}
       </section>
 
-      {/* SECTION B: Sovereign Offline File Export, Import & 1-Click Rollback */}
+      {/* SECTION B: Offline Backup & Restore */}
       <section className="space-y-6">
         <div className="border-b border-border-subtle pb-3">
           <h2 className="font-serif text-xl font-semibold text-primary">
-            Sovereign Offline File Export, Import & 1-Click Rollback
+            Offline Backup & Restore
           </h2>
-          <p className="font-sans text-xs text-secondary mt-1">
-            Works 100% offline without any account. Non-destructive smart merge or clean overwrite.
-          </p>
         </div>
 
         {/* acc-rollback-bar (when rollback snapshot exists) */}
