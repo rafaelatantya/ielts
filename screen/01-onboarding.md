@@ -14,15 +14,12 @@ Welcome the user without requiring registration or downloading any AI models upf
 ## 2. Mandatory UI Elements Checklist
 
 ### 2.1 Editorial Welcome Header & Claude-Style Gooseneck Lamp Scribble Animation
-- [ ] **Hero Animated SVG Illustration (`GooseneckLampScribble` — `viewBox="0 0 1000 640"`, height `200px`, `#E2D9CA` Oatmeal Well)**:
+- [ ] **Hero Animated SVG Illustration (`GooseneckLampScribble` — `viewBox="0 0 1000 640"`, height `210px`, `#E2D9CA` Oatmeal Well)**:
   - Hand-drawn felt-tip (`#181512`, `stroke-width: 14px–17px`, `#claude-ink-wobble` displacement filter) gooseneck desk lamp on the left shining a diagonal polygon cone of warm chalky light (`#FAF7F1`) across a rectangular manuscript page on the right.
-  - Inside the light beam's `<clipPath id="light-reveal-clip">`, three rows of looping cursive `"u/w"` text scribbles are dynamically revealed as the lamp switches on (`stroke-dashoffset` draw-in over `600ms` followed by a gentle `-28deg <-> -36deg` beam sweep and `9 fps` stepped line boil).
-- [ ] **Serif Title (`h1` — `Source Serif 4`, `34px`, `#1C1917`)**: *"Your Private, Local-First IELTS Study Studio."*
-- [ ] **Subtitle (`body-md` — `Plus Jakarta Sans`, `#57534E`)**: Explains that 100% of study sessions, recordings, and band diagnostics run locally in the browser on OPFS disk—with zero mandatory login and zero background data drain.
-- [ ] **3 Trust Pills (`#F4F0EA` background, `#1C1917` text)**:
-  1. `100% Offline-Capable (SQLite OPFS)`
-  2. `Zero Auto-Download Quota Drain`
-  3. `Sovereign Export / Import (.ieltsbackup)`
+  - Inside the light beam's `<clipPath id="light-reveal-clip">`, three rows of looping cursive `"u/w"` text scribbles are dynamically revealed as the lamp switches on (`stroke-dashoffset` draw-in over `600ms` followed by a gentle beam sweep and `9 fps` stepped line boil).
+- [ ] **Serif Title (`h1` — `Source Serif 4`, `34px`, `#1C1917`)**: *"Your IELTS Study Studio"*
+- [ ] **Subtitle (`body-md` — `Plus Jakarta Sans`, `#57534E`)**: *"Made with ♥ by Rafael Atantya, Claude, Hermes Agent, and Antigravity"*
+- [ ] **Zero Marketing Pills**: No marketing/feature badges below the subtitle.
 
 ### 2.2 Step 1 — IELTS Track & Target Band Selector
 - [ ] **Exam Module Segmented Control**:
@@ -66,12 +63,9 @@ Welcome the user without requiring registration or downloading any AI models upf
 
 | Element ID | Tag / Component | Exact Verbatim Copy | Design Tokens | Exact Function & SQLite/API Binding |
 | :--- | :--- | :--- | :--- | :--- |
-| `onb-scribble-hero` | `<GooseneckLampScribble />` | *(Animated SVG — no text inside SVG)* | `viewBox="0 0 1000 640"`, height `190px`, bg `#E2D9CA`, stroke `#181512`, beam `#FAF7F1` | Plays the 3-phase Claude-style Gooseneck Desk Lamp animation (`600ms` `stroke-dashoffset` draw-in + `#FAF7F1` light cone sweeping across the manuscript to reveal 3 rows of cursive scribbles). |
-| `onb-title` | `<h1>` | `Your Private, Local-First IELTS Study Studio.` | `h1` (`Source Serif 4`, `32px`, `600`, `#1C1917`) | Static main heading. |
-| `onb-subtitle` | `<p>` | `All speaking recordings, essays, and band diagnostics are processed and stored directly on your device using WebAssembly and SQLite. Zero mandatory account, zero background data drain.` | `body-md` (`Plus Jakarta Sans`, `15px`, `#57534E`) | Static explanatory lead paragraph. |
-| `onb-pill-1` | `<span>` | `100% Offline SQLite OPFS` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 1. |
-| `onb-pill-2` | `<span>` | `Zero Auto-Download Quota Drain` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 2. |
-| `onb-pill-3` | `<span>` | `Sovereign .ieltsbackup Export` | `label-sm` (`12px`), `#F4F0EA` bg, `#1C1917` text, `rounded.xs` | Static trust badge 3. |
+| `onb-scribble-hero` | `<GooseneckLampScribble />` | *(Animated SVG — no text inside SVG)* | `viewBox="0 0 1000 640"`, height `210px`, bg `#E2D9CA`, stroke `#181512`, beam `#FAF7F1` | Plays the 3-phase Claude-style Gooseneck Desk Lamp animation (`600ms` `stroke-dashoffset` draw-in + `#FAF7F1` light cone sweeping across the manuscript to reveal 3 rows of cursive scribbles). |
+| `onb-title` | `<h1>` | `Your IELTS Study Studio` | `h1` (`Source Serif 4`, `32px`, `600`, `#1C1917`) | Static main heading. |
+| `onb-subtitle` | `<p>` | `Made with ♥ by Rafael Atantya, Claude, Hermes Agent, and Antigravity` | `body-md` (`Plus Jakarta Sans`, `15px`, `#57534E`) | Static attribution subtitle. |
 | `onb-section-1-label` | `<h2>` | `1. Exam Track & Target Band` | `h3` (`Source Serif 4`, `18px`, `600`, `#1C1917`) | Section 1 subheader. |
 | `onb-track-academic` | `<button role="radio">` | `IELTS Academic` + subtext `University & Professional Registration (Charts/Graphs Task 1)` | Active: `#FFFFFF` bg, `2px solid #1E3A5F`; Inactive: `#F4F0EA` bg, `1px solid #E5DEC9` | Sets `exam_track = 'academic'` (Default selected). |
 | `onb-track-general` | `<button role="radio">` | `IELTS General Training` + subtext `Migration & Work Experience (Formal/Informal Letter Task 1)` | Active: `#FFFFFF` bg, `2px solid #1E3A5F`; Inactive: `#F4F0EA` bg, `1px solid #E5DEC9` | Sets `exam_track = 'general'`. |

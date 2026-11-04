@@ -31,6 +31,7 @@ export const OnboardingPage: React.FC = () => {
     Boolean(storageStatus?.isPersistent)
   )
   const [isPersistLoading, setIsPersistLoading] = useState<boolean>(false)
+  const [persistMessage, setPersistMessage] = useState<string | null>(null)
   const [importNotice, setImportNotice] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -40,6 +41,17 @@ export const OnboardingPage: React.FC = () => {
     try {
       const granted = await requestPersist()
       setIsPersisted(granted)
+      if (granted) {
+        const nativePersisted =
+          typeof navigator !== 'undefined' &&
+          navigator.storage?.persisted &&
+          (await navigator.storage.persisted())
+        setPersistMessage(
+          nativePersisted
+            ? '✓ Browser eviction lock granted & OPFS volume verified.'
+            : '✓ OPFS local volume initialized & locked on disk.'
+        )
+      }
     } finally {
       setIsPersistLoading(false)
     }
@@ -96,41 +108,19 @@ export const OnboardingPage: React.FC = () => {
         <GooseneckLampScribble className="w-full mb-2" />
 
         {/* Editorial Welcome Header */}
-        <div className="space-y-3 text-center sm:text-left">
+        <div className="space-y-2 text-center sm:text-left">
           <h1
             id="onb-title"
             className="font-serif text-[28px] sm:text-[32px] font-semibold text-primary leading-tight tracking-[-0.015em]"
           >
-            Your Private, Local-First IELTS Study Studio.
+            Your IELTS Study Studio
           </h1>
           <p
             id="onb-subtitle"
             className="font-sans text-[15px] text-secondary leading-relaxed"
           >
-            All speaking recordings, essays, and band diagnostics are processed and stored directly on your device using WebAssembly and SQLite. Zero mandatory account, zero background data drain.
+            Made with ♥ by Rafael Atantya, Claude, Hermes Agent, and Antigravity
           </p>
-
-          {/* 3 Trust Pills */}
-          <div className="flex flex-wrap gap-2 pt-1 justify-center sm:justify-start">
-            <span
-              id="onb-pill-1"
-              className="inline-flex items-center px-2.5 py-1 rounded-xs bg-surface-elevated text-primary text-xs font-semibold tracking-wide border border-border-subtle"
-            >
-              100% Offline SQLite OPFS
-            </span>
-            <span
-              id="onb-pill-2"
-              className="inline-flex items-center px-2.5 py-1 rounded-xs bg-surface-elevated text-primary text-xs font-semibold tracking-wide border border-border-subtle"
-            >
-              Zero Auto-Download Quota Drain
-            </span>
-            <span
-              id="onb-pill-3"
-              className="inline-flex items-center px-2.5 py-1 rounded-xs bg-surface-elevated text-primary text-xs font-semibold tracking-wide border border-border-subtle"
-            >
-              Sovereign .ieltsbackup Export
-            </span>
-          </div>
         </div>
 
         {/* Main Onboarding Form */}
@@ -265,19 +255,24 @@ export const OnboardingPage: React.FC = () => {
                   id="onb-storage-btn"
                   onClick={handlePersistClick}
                   disabled={isPersistLoading}
-                  className={`px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors shrink-0 ${
-                    isPersisted
+                  className={`px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+                    isPersisted || storageStatus?.isPersistent
                       ? 'bg-success-bg text-success-ink border border-success-ink'
                       : 'bg-surface-card text-primary border border-border-subtle hover:bg-neutral'
                   }`}
                 >
-                  {isPersisted
+                  {isPersisted || storageStatus?.isPersistent
                     ? 'Persistent Storage Locked ✓'
                     : isPersistLoading
-                    ? 'Requesting...'
+                    ? 'Locking OPFS...'
                     : 'Lock Persistent Storage'}
                 </button>
               </div>
+              {persistMessage && (
+                <div className="text-xs font-mono text-success-ink">
+                  {persistMessage}
+                </div>
+              )}
 
               {/* Incognito Warning if Quota < 150MB */}
               {storageStatus?.isIncognito && (

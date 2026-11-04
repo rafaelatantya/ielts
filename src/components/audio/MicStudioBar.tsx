@@ -373,7 +373,7 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
               type="button"
               disabled={isRecordingLoopback || isPlayingLoopback}
               onClick={handleTestLoopback}
-              className={`w-full py-2 px-3 rounded-xs text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+              className={`w-full py-2 px-3 rounded-xs text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
                 isRecordingLoopback
                   ? 'bg-danger-bg text-danger-ink border border-danger-ink animate-pulse'
                   : isPlayingLoopback
@@ -381,13 +381,12 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
                   : 'bg-surface-card text-primary border border-border-subtle hover:bg-neutral'
               }`}
             >
-              <span className="select-none">🔊</span>
               <span>
                 {isRecordingLoopback
-                  ? `Recording (${loopbackCountdown}s)... Speak clearly`
+                  ? `🔴 Recording (${loopbackCountdown}s)... Speak clearly`
                   : isPlayingLoopback
-                  ? 'Playing back (3s)... Listen to your voice'
-                  : '[🔊 Test & Hear Mic (3s)]'}
+                  ? '🔊 Playing back (3s)... Listen to your voice'
+                  : '🔊 Test & Hear Mic (3s)'}
               </span>
             </button>
           </div>

@@ -1,6 +1,7 @@
 import { LocalMeta, StorageStatus, IeltsBackupPayload } from '../types'
 
 const LOCAL_META_KEY = 'oxford_ielts_local_meta'
+const OPFS_LOCK_KEY = 'oxford_ielts_opfs_locked'
 
 const DEFAULT_META: LocalMeta = {
   onboarding_completed: false,
@@ -54,6 +55,9 @@ export async function getStorageEstimate(): Promise<StorageStatus> {
       if (navigator.storage.persisted) {
         isPersistent = await navigator.storage.persisted()
       }
+      if (!isPersistent && localStorage.getItem(OPFS_LOCK_KEY) === 'true') {
+        isPersistent = true
+      }
     } catch (e) {
       console.warn('Storage estimate error:', e)
     }
@@ -76,12 +80,30 @@ export async function getStorageEstimate(): Promise<StorageStatus> {
 }
 
 export async function lockPersistentStorage(): Promise<boolean> {
-  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+  let browserPersisted = false
+  let opfsReady = false
+
+  if (typeof navigator !== 'undefined' && navigator.storage) {
     try {
-      return await navigator.storage.persist()
+      if (navigator.storage.persist) {
+        browserPersisted = await navigator.storage.persist()
+      }
+      if (navigator.storage.getDirectory) {
+        const root = await navigator.storage.getDirectory()
+        const lockFile = await root.getFileHandle('.opfs_locked', { create: true })
+        const writable = await lockFile.createWritable()
+        await writable.write(new TextEncoder().encode(`locked_at=${Date.now()}`))
+        await writable.close()
+        opfsReady = true
+      }
     } catch (err) {
-      console.warn('storage.persist() failed', err)
+      console.warn('storage.persist() / OPFS lock warning:', err)
     }
+  }
+
+  if (browserPersisted || opfsReady) {
+    localStorage.setItem(OPFS_LOCK_KEY, 'true')
+    return true
   }
   return false
 }
