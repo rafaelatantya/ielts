@@ -37,3 +37,4 @@ pnpm-debug.log*
 *.sqlite3
 *.db
 coverage/
+*.tsbuildinfo
