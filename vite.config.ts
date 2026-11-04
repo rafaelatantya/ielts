@@ -16,4 +16,7 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+  },
 })

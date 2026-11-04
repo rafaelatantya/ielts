@@ -47,7 +47,7 @@ function formatTimestamp(ts: number | null): string {
 }
 
 export const AccountPage: React.FC = () => {
-  const { meta, updateMeta } = useApp()
+  const { meta } = useApp()
 
   // Google Auth state (stored in localStorage for sovereign simulation)
   const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
