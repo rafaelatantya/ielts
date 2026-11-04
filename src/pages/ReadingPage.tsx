@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import {
@@ -91,7 +91,6 @@ export const ReadingPage: React.FC = () => {
   const [completedAttemptId, setCompletedAttemptId] = useState<string | null>(
     searchParams.get('attemptId') || null
   )
-  const [activeEvidenceQuestionId, setActiveEvidenceQuestionId] = useState<number | null>(null)
   const [addedVocabCards, setAddedVocabCards] = useState<Record<string, boolean>>({})
 
   // Passage article DOM ref
@@ -297,7 +296,6 @@ export const ReadingPage: React.FC = () => {
 
   // Navigate & Jump to evidence span
   const jumpToEvidence = (qId: number, paraLetter: string) => {
-    setActiveEvidenceQuestionId(qId)
     const targetPassageIndex = READING_PASSAGES.findIndex((p) =>
       p.questions.some((q) => q.id === qId)
     )
@@ -611,7 +609,7 @@ export const ReadingPage: React.FC = () => {
 
                   <p className="leading-relaxed">
                     {/* Render paragraph segments with evidence spans attached */}
-                    {renderParagraphWithEvidence(p, currentPassage.questions, isTestSubmitted)}
+                    {renderParagraphWithEvidence(p, currentPassage.questions)}
                   </p>
                 </div>
               ))}
@@ -683,7 +681,6 @@ export const ReadingPage: React.FC = () => {
               const currentAns = answers[q.id] || ''
               const isFlagged = !!flaggedQuestions[q.id]
               const isCorrect = isTestSubmitted && currentAns.trim().toUpperCase() === q.correctAnswer.trim().toUpperCase()
-              const isIncorrect = isTestSubmitted && !isCorrect
               const wordCount = getWordCount(currentAns)
               const isOverLimit = q.type === 'summary_completion' && wordCount > 1
 
@@ -997,8 +994,7 @@ export const ReadingPage: React.FC = () => {
 // Helper to render paragraph with evidence span attributes and highlight wrappers
 function renderParagraphWithEvidence(
   paragraph: { letter: string; content: string; evidenceQuestions: number[] },
-  questions: QuestionBase[],
-  isSubmitted: boolean
+  questions: QuestionBase[]
 ) {
   // Extract evidence questions that belong to this paragraph
   const evQuestions = questions.filter((q) => paragraph.evidenceQuestions.includes(q.id))
