@@ -15,7 +15,6 @@ interface MicStudioBarProps {
 
 export const MicStudioBar: React.FC<MicStudioBarProps> = ({
   onMicSelected,
-  showFullControls = false,
 }) => {
   const { meta, updateMeta } = useApp()
   const [devices, setDevices] = useState<MicDeviceInfo[]>([])
@@ -26,7 +25,6 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
     meta.preferred_mic_label || ''
   )
   const [hasPermission, setHasPermission] = useState<boolean>(false)
-  const [isExpanded, setIsExpanded] = useState<boolean>(showFullControls)
   const [liveDbfs, setLiveDbfs] = useState<number>(-60)
   const [noiseFloor, setNoiseFloor] = useState<number>(-48)
   const [isRecordingLoopback, setIsRecordingLoopback] = useState<boolean>(false)
@@ -107,9 +105,6 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
             const fillWidth = normalized * width
 
             // Segment color logic:
-            // Normal speech (-40 to -12 dBFS) -> #166534
-            // Loud speech (-12 to -3 dBFS) -> #92400E
-            // Clipping (>= -3 dBFS) -> #991B1B
             if (dbfs >= -3) {
               ctx2d.fillStyle = '#991B1B'
             } else if (dbfs >= -14) {
@@ -142,7 +137,6 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
         const stream = await getMicStream(deviceId)
         streamRef.current = stream
         setHasPermission(true)
-        setIsExpanded(true)
 
         const list = await getMicrophoneList()
         setDevices(list)
@@ -181,7 +175,6 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
       setDevices(list)
       // Check if current mic is still present
       if (activeDeviceId && !list.some((d) => d.deviceId === activeDeviceId)) {
-        // Fallback to first available device
         if (list.length > 0) {
           initMic(list[0].deviceId)
         }
@@ -294,104 +287,123 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
     : `Noisy Env ${noiseFloor} dBFS`
 
   return (
-    <div className="w-full space-y-3">
-      {/* Primary Trigger / Status Button */}
-      <button
-        id="onb-mic-btn"
-        type="button"
-        onClick={handlePromptAndSelect}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded-sm bg-surface-elevated text-primary border border-border-strong text-xs font-semibold hover:bg-neutral transition-colors text-left"
-      >
-        <span className="truncate">
-          {hasPermission && activeLabel
-            ? `Active Mic: ${activeLabel}`
-            : 'Prompt Browser & Select Microphone'}
-        </span>
-      </button>
-
-      {/* Expanded Live Microphone Selector & dBFS VU Meter Controls */}
-      {isExpanded && (
-        <div className="p-3 bg-surface-elevated rounded-sm border border-border-subtle space-y-3 animate-fade-slide">
-          {/* Hardware Dropdown */}
-          <div>
-            <label
-              htmlFor="onb-mic-select"
-              className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1"
-            >
-              Hardware Microphone Input
-            </label>
-            <select
-              id="onb-mic-select"
-              value={activeDeviceId}
-              onChange={(e) => handleDeviceChangeSelect(e.target.value)}
-              className="w-full text-xs font-sans bg-surface-card text-primary border border-border-strong rounded-xs px-2.5 py-1.5 focus:outline-none focus:border-accent-navy cursor-pointer"
-            >
-              {devices.length === 0 ? (
-                <option value="">Default System Microphone</option>
-              ) : (
-                devices.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Real-time 60fps dBFS VU Meter */}
-          <div>
-            <div className="flex items-center justify-between text-[11px] font-mono text-secondary mb-1">
-              <span>Input Level</span>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-1.5 py-0.5 rounded-xs text-[10px] font-mono font-medium ${
-                    isQuietRoom
-                      ? 'bg-success-bg text-success-ink'
-                      : 'bg-warning-bg text-warning-ink'
-                  }`}
-                >
-                  {noiseFloorBadgeText}
-                </span>
-                <span className="text-primary font-semibold tabular-nums">
-                  {liveDbfs} dBFS
-                </span>
-              </div>
-            </div>
-            {/* 60fps Canvas VU Meter */}
-            <canvas
-              ref={canvasRef}
-              width={300}
-              height={8}
-              className="w-full h-2 rounded-xs border border-border-subtle block"
-            />
-          </div>
-
-          {/* 3-Second Loopback Tester */}
-          <div>
-            <button
-              id="onb-mic-test-btn"
-              type="button"
-              disabled={isRecordingLoopback || isPlayingLoopback}
-              onClick={handleTestLoopback}
-              className={`w-full py-2 px-3 rounded-xs text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-                isRecordingLoopback
-                  ? 'bg-danger-bg text-danger-ink border border-danger-ink animate-pulse'
-                  : isPlayingLoopback
-                  ? 'bg-success-bg text-success-ink border border-success-ink'
-                  : 'bg-surface-card text-primary border border-border-subtle hover:bg-neutral'
-              }`}
-            >
-              <span>
-                {isRecordingLoopback
-                  ? `🔴 Recording (${loopbackCountdown}s)... Speak clearly`
-                  : isPlayingLoopback
-                  ? '🔊 Playing back (3s)... Listen to your voice'
-                  : '🔊 Test & Hear Mic (3s)'}
-              </span>
-            </button>
-          </div>
+    <div className="p-3.5 bg-surface-elevated rounded-sm border border-border-subtle space-y-3">
+      {/* Top Header Row matching Local Disk Quota card */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="font-mono text-[13px] text-primary truncate">
+          Microphone:{' '}
+          {hasPermission && activeLabel ? (
+            <span className="font-sans font-medium">{activeLabel}</span>
+          ) : (
+            <span className="text-secondary font-sans">
+              Not selected (Click button to prompt browser)
+            </span>
+          )}
         </div>
-      )}
+        <button
+          id="onb-mic-btn"
+          type="button"
+          onClick={handlePromptAndSelect}
+          className={`px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+            hasPermission && activeLabel
+              ? 'bg-success-bg text-success-ink border border-success-ink'
+              : 'bg-surface-card text-primary border border-border-subtle hover:bg-neutral'
+          }`}
+        >
+          {hasPermission && activeLabel
+            ? 'Mic Connected ✓ (Re-Scan)'
+            : 'Prompt Browser & Select Mic'}
+        </button>
+      </div>
+
+      {/* Hardware Microphone Input, dBFS VU Meter, & Test Controls */}
+      <div className={`space-y-3 ${!hasPermission ? 'opacity-50 pointer-events-none' : ''}`}>
+        {/* Hardware Dropdown */}
+        <div>
+          <label
+            htmlFor="onb-mic-select"
+            className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1"
+          >
+            Hardware Microphone Input
+          </label>
+          <select
+            id="onb-mic-select"
+            disabled={!hasPermission}
+            value={activeDeviceId}
+            onChange={(e) => handleDeviceChangeSelect(e.target.value)}
+            className="w-full text-xs font-sans bg-surface-card text-primary border border-border-strong rounded-xs px-2.5 py-1.5 focus:outline-none focus:border-accent-navy cursor-pointer disabled:cursor-not-allowed"
+          >
+            {devices.length === 0 ? (
+              <option value="">Default System Microphone</option>
+            ) : (
+              devices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        {/* Real-time 60fps dBFS VU Meter */}
+        <div>
+          <div className="flex items-center justify-between text-[11px] font-mono text-secondary mb-1">
+            <span>Input Level</span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-1.5 py-0.5 rounded-xs text-[10px] font-mono font-medium ${
+                  !hasPermission
+                    ? 'bg-surface-card text-secondary border border-border-subtle'
+                    : isQuietRoom
+                    ? 'bg-success-bg text-success-ink'
+                    : 'bg-warning-bg text-warning-ink'
+                }`}
+              >
+                {!hasPermission ? 'Standby · Select mic above' : noiseFloorBadgeText}
+              </span>
+              <span className="text-primary font-semibold tabular-nums">
+                {!hasPermission ? '-- dBFS' : `${liveDbfs} dBFS`}
+              </span>
+            </div>
+          </div>
+          {/* 60fps Canvas VU Meter */}
+          <canvas
+            ref={canvasRef}
+            width={300}
+            height={8}
+            className="w-full h-2 rounded-xs border border-border-subtle block bg-[#E5DEC9]"
+          />
+        </div>
+
+        {/* 3-Second Loopback Tester */}
+        <div>
+          <button
+            id="onb-mic-test-btn"
+            type="button"
+            disabled={!hasPermission || isRecordingLoopback || isPlayingLoopback}
+            onClick={handleTestLoopback}
+            className={`w-full py-2 px-3 rounded-xs text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+              !hasPermission
+                ? 'bg-surface-card text-secondary border border-border-subtle cursor-not-allowed'
+                : isRecordingLoopback
+                ? 'bg-danger-bg text-danger-ink border border-danger-ink animate-pulse cursor-pointer'
+                : isPlayingLoopback
+                ? 'bg-success-bg text-success-ink border border-success-ink cursor-pointer'
+                : 'bg-surface-card text-primary border border-border-subtle hover:bg-neutral cursor-pointer'
+            }`}
+          >
+            <span>
+              {!hasPermission
+                ? '🔊 Test & Hear Mic (3s)'
+                : isRecordingLoopback
+                ? `🔴 Recording (${loopbackCountdown}s)... Speak clearly`
+                : isPlayingLoopback
+                ? '🔊 Playing back (3s)... Listen to your voice'
+                : '🔊 Test & Hear Mic (3s)'}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
