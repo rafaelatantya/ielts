@@ -120,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
             />
             <span>
               {leaderStatus === 'leader'
-                ? 'OPFS SQLite: Active (Leader)'
+                ? 'Local Storage: Active (Leader)'
                 : 'Follower Tab'}
             </span>
           </div>

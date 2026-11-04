@@ -676,7 +676,7 @@ export const DashboardPage: React.FC = () => {
 
             <div className="space-y-2.5 font-mono text-[12px]">
               <div className="flex justify-between py-1 border-b border-border-subtle">
-                <span className="text-secondary">OPFS Database:</span>
+                <span className="text-secondary">Local Storage:</span>
                 <span className="text-primary font-semibold tabular-nums">{dbSizeMb} MB</span>
               </div>
               <div className="flex justify-between py-1 border-b border-border-subtle">
@@ -702,7 +702,7 @@ export const DashboardPage: React.FC = () => {
               onClick={handleQuickExport}
               className="w-full py-2 px-3 rounded-sm bg-surface-elevated text-primary border border-border-subtle text-xs font-semibold hover:border-border-strong transition-colors cursor-pointer disabled:opacity-50"
             >
-              {isExporting ? 'Exporting...' : 'Export .ieltsbackup Now'}
+              {isExporting ? 'Exporting...' : 'Export Backup (.zip)'}
             </button>
             <Link
               to="/account"
