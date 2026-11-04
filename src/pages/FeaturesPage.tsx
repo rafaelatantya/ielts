@@ -627,7 +627,6 @@ export const FeaturesPage: React.FC = () => {
                 disabled={allDownloadingOrReady}
                 className="w-full lg:w-auto font-sans text-xs font-semibold px-5 py-2.5 bg-[#9A3412] hover:bg-[#832b0e] text-white rounded-sm shadow-sm transition-colors cursor-pointer disabled:opacity-75 disabled:cursor-wait flex items-center justify-center gap-2"
               >
-                <span>📦</span>
                 Download All AI Models (278.3 MB)
               </button>
             )}

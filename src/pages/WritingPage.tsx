@@ -321,7 +321,7 @@ export const WritingPage: React.FC = () => {
               className="text-[10px] text-secondary hover:text-primary ml-1 cursor-pointer font-sans"
               title={isTimerPaused ? 'Resume countdown' : 'Pause timer'}
             >
-              {isTimerPaused ? '▶' : '⏸'}
+              {isTimerPaused ? 'Resume' : 'Pause'}
             </button>
           </div>
 

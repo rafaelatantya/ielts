@@ -491,7 +491,7 @@ export const SpeakingPage: React.FC = () => {
           role="status"
           className="p-3 bg-surface-elevated text-primary border border-accent-navy rounded-sm shadow-md font-sans text-xs flex items-center justify-between animate-fade-slide"
         >
-          <span>🎙️ {deviceToast}</span>
+          <span>{deviceToast}</span>
           <button
             type="button"
             onClick={() => setDeviceToast(null)}

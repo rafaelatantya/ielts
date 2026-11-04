@@ -555,7 +555,7 @@ export const ReviewPage: React.FC = () => {
                     disabled={isSpeakingTts}
                     className="px-3.5 py-2 rounded-sm bg-[#FFFFFF] hover:bg-[#F4F0EA] text-[#1C1917] border border-[#C7BFA8] text-xs font-sans font-medium flex items-center gap-2 transition-colors cursor-pointer"
                   >
-                    <span>{isSpeakingTts ? '🔊 Playing...' : '🔊 Play Native Pronunciation'}</span>
+                    <span>{isSpeakingTts ? 'Playing...' : 'Play Native Pronunciation'}</span>
                   </button>
 
                   <button
@@ -568,7 +568,7 @@ export const ReviewPage: React.FC = () => {
                         : 'bg-[#FFFFFF] hover:bg-[#F4F0EA] border-[#C7BFA8] text-[#1C1917]'
                     }`}
                   >
-                    <span>{isRecordingGop ? `🎙️ Listening (${recordingDbfs} dBFS)...` : '🎙️ Record & Check GOP Now'}</span>
+                    <span>{isRecordingGop ? `Listening (${recordingDbfs} dBFS)...` : 'Record & Check GOP Now'}</span>
                   </button>
                 </div>
 

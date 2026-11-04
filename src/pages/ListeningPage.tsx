@@ -428,14 +428,14 @@ export const ListeningPage: React.FC = () => {
                   className="px-2 py-1 rounded bg-surface-card border border-border-subtle text-xs font-mono text-secondary hover:text-primary"
                   title="Rewind 5 seconds"
                 >
-                  ⏪ -5s
+                  -5s
                 </button>
                 <button
                   onClick={() => handleSeek(currentTimeSec + 5)}
                   className="px-2 py-1 rounded bg-surface-card border border-border-subtle text-xs font-mono text-secondary hover:text-primary"
                   title="Forward 5 seconds"
                 >
-                  ⏩ +5s
+                  +5s
                 </button>
               </>
             )}
@@ -478,7 +478,7 @@ export const ListeningPage: React.FC = () => {
               onClick={handleTestSpeaker}
               className="px-2.5 py-1 rounded bg-surface-card border border-border-subtle text-xs font-sans text-secondary hover:text-primary shadow-xs"
             >
-              🔔 Test Speaker
+              Test Speaker
             </button>
           </div>
         </div>
@@ -808,7 +808,7 @@ export const ListeningPage: React.FC = () => {
                   <p className="text-xs sm:text-sm">{turn.text}</p>
                   {turn.distractorTrap && (
                     <div className="mt-1.5 p-2 bg-[#FEF3C7] border border-warning-ink/30 rounded text-[#92400E] text-xs font-sans">
-                      <strong>⚠️ Distractor Trap:</strong> {turn.distractorTrap}
+                      <strong>Distractor Trap:</strong> {turn.distractorTrap}
                     </div>
                   )}
                 </div>

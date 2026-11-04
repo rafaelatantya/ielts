@@ -553,7 +553,7 @@ export const SpeakingReportPage: React.FC = () => {
               onClick={handleTogglePlay}
               className="px-3 py-1.5 rounded-sm bg-surface-card text-primary border border-border-strong text-xs font-semibold hover:bg-surface-elevated transition-colors cursor-pointer"
             >
-              {isPlayingAudio ? '⏸ Pause' : '▶ Play Recording'}
+              {isPlayingAudio ? 'Pause' : 'Play Recording'}
             </button>
             <span className="tabular-nums text-primary font-medium">
               {formattedCurrentTime} / {formattedDuration}
@@ -655,7 +655,7 @@ export const SpeakingReportPage: React.FC = () => {
                   key={`pause-${index}`}
                   className="inline-flex items-center px-2 py-0.5 mx-1.5 rounded-xs font-mono text-[11px] font-semibold bg-[#FEF3C7] text-[#92400E] border border-amber-300 align-middle"
                 >
-                  [⏸ {w.pauseDuration}s Mid-Clause]
+                  [{w.pauseDuration}s Mid-Clause]
                 </span>
               ) : null
             }

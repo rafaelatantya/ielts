@@ -740,11 +740,11 @@ export const SpeakingSimulatorPage: React.FC = () => {
             className="text-[12px] font-sans bg-[#FFFFFF] text-primary border border-[#C7BFA8] rounded-xs px-2.5 py-1 focus:outline-none focus:border-accent-navy cursor-pointer max-w-[200px] truncate"
           >
             {devices.length === 0 ? (
-              <option value="">🎙️ {activeMicLabel}</option>
+              <option value="">{activeMicLabel}</option>
             ) : (
               devices.map((d, idx) => (
                 <option key={d.deviceId || idx} value={d.deviceId}>
-                  🎙️ {d.label || `Microphone ${idx + 1}`}
+                  {d.label || `Microphone ${idx + 1}`}
                 </option>
               ))
             )}

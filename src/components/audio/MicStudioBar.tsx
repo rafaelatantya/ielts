@@ -394,12 +394,12 @@ export const MicStudioBar: React.FC<MicStudioBarProps> = ({
           >
             <span>
               {!hasPermission
-                ? '🔊 Test & Hear Mic (3s)'
+                ? 'Test & Hear Mic (3s)'
                 : isRecordingLoopback
-                ? `🔴 Recording (${loopbackCountdown}s)... Speak clearly`
+                ? `Recording (${loopbackCountdown}s)... Speak clearly`
                 : isPlayingLoopback
-                ? '🔊 Playing back (3s)... Listen to your voice'
-                : '🔊 Test & Hear Mic (3s)'}
+                ? 'Playing back (3s)... Listen to your voice'
+                : 'Test & Hear Mic (3s)'}
             </span>
           </button>
         </div>

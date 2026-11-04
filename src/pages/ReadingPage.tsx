@@ -730,7 +730,7 @@ export const ReadingPage: React.FC = () => {
                           : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      <span>{isFlagged ? '🚩 Flagged' : 'Flag'}</span>
+                      <span>{isFlagged ? 'Flagged' : 'Flag'}</span>
                     </button>
                   </div>
 
@@ -839,7 +839,7 @@ export const ReadingPage: React.FC = () => {
                               : 'bg-surface-elevated text-secondary border-border-subtle'
                           }`}
                         >
-                          {isOverLimit ? '⚠️ STRICT: ONE WORD ONLY' : 'ONE WORD ONLY'}
+                          {isOverLimit ? 'STRICT: ONE WORD ONLY' : 'ONE WORD ONLY'}
                         </span>
                       </div>
                       {isOverLimit && (

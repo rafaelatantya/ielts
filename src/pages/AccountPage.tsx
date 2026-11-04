@@ -392,7 +392,7 @@ export const AccountPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-2 border-b border-border-subtle pb-3">
                   <div>
                     <h3 className="font-serif text-base font-semibold text-primary flex items-center gap-1.5">
-                      <span>💻</span> This Device
+                      This Device
                     </h3>
                     <div className="font-mono text-xs text-secondary tabular-nums mt-1">
                       Last Updated: {formatTimestamp(localStats.updatedAt)}
@@ -405,7 +405,7 @@ export const AccountPage: React.FC = () => {
                       </span>
                     ) : (
                       <span className="font-mono text-xs font-semibold px-2.5 py-1 bg-[#FEF3C7] text-[#92400E] border border-[#92400E] rounded-sm tabular-nums">
-                        ⚠️ OLDER THAN CLOUD
+                        OLDER THAN CLOUD
                       </span>
                     )}
                   </div>
@@ -454,7 +454,7 @@ export const AccountPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-2 border-b border-border-subtle pb-3">
                   <div>
                     <h3 className="font-serif text-base font-semibold text-primary flex items-center gap-1.5">
-                      <span>☁️</span> Google Cloud Backup
+                      Google Cloud Backup
                     </h3>
                     <div className="font-mono text-xs text-secondary tabular-nums mt-1">
                       Last Updated: {formatTimestamp(cloudMeta.updatedAt)}
@@ -532,7 +532,7 @@ export const AccountPage: React.FC = () => {
                 onClick={() => handleOpenSyncModal('UPLOAD_TO_CLOUD')}
                 className="font-sans text-xs font-semibold px-5 py-2.5 bg-[#9A3412] hover:bg-[#832b0e] text-white rounded-sm shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                <span>⬆️</span> Upload Data to Cloud (Replace Cloud with This Device)
+                Upload Data to Cloud (Replace Cloud with This Device)
               </button>
 
               <button
@@ -541,7 +541,7 @@ export const AccountPage: React.FC = () => {
                 onClick={() => handleOpenSyncModal('PULL_FROM_CLOUD')}
                 className="font-sans text-xs font-semibold px-5 py-2.5 bg-[#F4F0EA] hover:bg-[#EAE4D8] text-[#1E3A5F] border border-[#1E3A5F] rounded-sm transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                <span>⬇️</span> Pull Data from Cloud (Replace This Device with Cloud)
+                Pull Data from Cloud (Replace This Device with Cloud)
               </button>
             </div>
           </div>
@@ -794,7 +794,7 @@ export const AccountPage: React.FC = () => {
                 {isHighRisk && (
                   <div className="p-4 rounded-sm bg-[#FEE2E2] border border-[#991B1B] text-[#991B1B] space-y-3">
                     <div className="font-sans text-xs font-bold flex items-center gap-1.5">
-                      <span>⚠️ DANGER:</span>
+                      <span>DANGER:</span>
                       <span>
                         The data on {syncDirection === 'UPLOAD_TO_CLOUD' ? 'Cloud' : 'This Device'} is {diffDays} DAYS NEWER than the snapshot you are about to overwrite it with!
                       </span>
