@@ -262,3 +262,33 @@ export async function parseBackupFile(file: File): Promise<IeltsBackupPayload> {
   }
   return data as IeltsBackupPayload
 }
+
+const TIER2_SPEAKING_CORE_STATUS_KEY = 'oxford_model_tier2_speaking_status'
+const TIER2_SPEAKING_CORE_PROGRESS_KEY = 'oxford_model_tier2_speaking_progress'
+
+export type ModelPackStatus = 'idle' | 'downloading' | 'paused' | 'ready'
+
+export function getTier2SpeakingModelStatus(): { status: ModelPackStatus; progressPct: number; verifiedMb: number } {
+  try {
+    const isLegacyWhisperReady = localStorage.getItem('oxford_model_whisper_ready') === 'true'
+    const status = (localStorage.getItem(TIER2_SPEAKING_CORE_STATUS_KEY) as ModelPackStatus) || (isLegacyWhisperReady ? 'ready' : 'idle')
+    const progressPct = Number(localStorage.getItem(TIER2_SPEAKING_CORE_PROGRESS_KEY)) || (status === 'ready' ? 100 : 0)
+    const verifiedMb = status === 'ready' ? 76.2 : Number(((progressPct / 100) * 76.2).toFixed(1))
+    return { status, progressPct, verifiedMb }
+  } catch {
+    return { status: 'idle', progressPct: 0, verifiedMb: 0 }
+  }
+}
+
+export function setTier2SpeakingModelStatus(status: ModelPackStatus, progressPct = 0): void {
+  try {
+    localStorage.setItem(TIER2_SPEAKING_CORE_STATUS_KEY, status)
+    localStorage.setItem(TIER2_SPEAKING_CORE_PROGRESS_KEY, String(progressPct))
+    if (status === 'ready') {
+      localStorage.setItem('oxford_model_whisper_ready', 'true')
+    }
+  } catch (err) {
+    console.error('Failed to set Tier 2 speaking model status', err)
+  }
+}
+
