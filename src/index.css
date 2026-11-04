@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #1c1917;
+    --color-secondary: #57534e;
+    --color-tertiary: #9a3412;
+    --color-neutral: #fbf9f5;
+    --color-surface-elevated: #f4f0ea;
+    --color-surface-oatmeal: #e2d9ca;
+    --color-surface-beam: #faf7f1;
+    --color-surface-card: #ffffff;
+    --color-ink-scribble: #181512;
+    --color-border-subtle: #e5dec9;
+    --color-border-strong: #c7bfa8;
+    --color-accent-forest: #1e4631;
+    --color-accent-navy: #1e3a5f;
+
+    --font-serif: 'Source Serif 4', 'Newsreader', 'Lora', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  body {
+    background-color: var(--color-neutral);
+    color: var(--color-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus ring following Oxford Atelier Archival Navy */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-navy);
+    outline-offset: 2px;
+  }
+}
+
+/* Custom scrollbar in warm paper tones */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f4f0ea;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d6cebe;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #c2b7a3;
+}
