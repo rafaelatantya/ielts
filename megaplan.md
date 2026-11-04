@@ -13,15 +13,16 @@
 1. [Executive Summary & Core Architectural Tenets](#1-executive-summary--core-architectural-tenets)
 2. [End-to-End System Architecture (Mermaid)](#2-end-to-end-system-architecture-mermaid)
 3. [Why Zero On-Device Generative LLM? The Pre-Generated Question Bank Architecture](#3-why-zero-on-device-generative-llm-the-pre-generated-question-bank-architecture)
-4. [Complete Technology Stack & Specialized WASM/ONNX Models](#4-complete-technology-stack--specialized-wasmonnx-models)
-5. [IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)](#5-ielts-speaking-auto-scoring-engine-mathematical--dsp-formulation)
-6. [Writing, Reading, Listening & FSRS v5 Study Modules](#6-writing-reading-listening--fsrs-v5-study-modules)
-7. [Local-First Storage Architecture & ER Schema (Mermaid + SQL)](#7-local-first-storage-architecture--er-schema-mermaid--sql)
-8. [Deterministic Export & Import System (Backup / Restore / CRDT Merge)](#8-deterministic-export--import-system-backup--restore--crdt-merge)
-9. [Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)](#9-google-oauth-20--multi-device-hlc-sync-protocol-mermaid)
-10. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#10-cloudflare-free-tier-capacity-math--cost-guardrails)
-11. [Security, Privacy & Cross-Origin Isolation](#11-security-privacy--cross-origin-isolation)
-12. [Monorepo Structure & Phased Implementation Roadmap](#12-monorepo-structure--phased-implementation-roadmap)
+4. [Two-Stage Specialist AI Ensemble & Complete Tech Stack](#4-two-stage-specialist-ai-ensemble--complete-tech-stack)
+5. [Zero-Pain Model Delivery: Unlimited Multi-CDN, Multi-Point Parallel Download & Crash-Resilient OPFS Resume](#5-zero-pain-model-delivery-unlimited-multi-cdn-multi-point-parallel-download--crash-resilient-opfs-resume)
+6. [IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)](#6-ielts-speaking-auto-scoring-engine-mathematical--dsp-formulation)
+7. [Writing, Reading, Listening & FSRS v5 Study Modules](#7-writing-reading-listening--fsrs-v5-study-modules)
+8. [Local-First Storage Architecture & ER Schema (Mermaid + SQL)](#8-local-first-storage-architecture--er-schema-mermaid--sql)
+9. [Deterministic Export & Import System (Backup / Restore / CRDT Merge)](#9-deterministic-export--import-system-backup--restore--crdt-merge)
+10. [Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)](#10-google-oauth-20--multi-device-hlc-sync-protocol-mermaid)
+11. [Cloudflare Free-Tier Capacity Math & Cost Guardrails](#11-cloudflare-free-tier-capacity-math--cost-guardrails)
+12. [Security, Privacy & Cross-Origin Isolation](#12-security-privacy--cross-origin-isolation)
+13. [Monorepo Structure & Phased Implementation Roadmap](#13-monorepo-structure--phased-implementation-roadmap)
 
 ---
 
@@ -184,28 +185,185 @@ flowchart LR
 
 ---
 
-## 4. Complete Technology Stack & Specialized WASM/ONNX Models
+## 4. Two-Stage Specialist AI Ensemble & Complete Tech Stack
 
-| Component | Technology / Model | Size (Quantized) | Execution Target | Exact Role |
+To achieve **both microscopic word-level feedback and psychometric-grade Band Score accuracy**, we use a **Two-Stage Hybrid Assessment Architecture** modeled after industrial automated speech scoring systems (ETS SpeechRater / Cambridge Speak & Improve):
+1. **Stage 1 — 5 Specialist Feature & Error Extractor Models**: Dedicated acoustic, phonetic, syntactic, and discourse ONNX/WASM models that inspect every millisecond of audio and every clause of text.
+2. **Stage 2 — Trained Psychometric Band Calibrator**: An ordinal regression / gradient-boosted tree model (`LightGBM / MLP Calibrator ONNX`, `< 500 KB`) trained offline on **10,000+ human-examiner-graded IELTS responses** using **Quadratic Weighted Kappa ($\text{QWK}$)** loss over a 48-dimensional objective feature vector $\mathbf{x} \in \mathbb{R}^{48}$.
+
+### 4.1 Two-Stage Specialist Scoring Architecture (Mermaid)
+
+```mermaid
+flowchart TD
+    subgraph Stage1["STAGE 1: 5 SPECIALIST EXTRACTOR MODELS (Micro-Diagnostic Detail)"]
+        direction TB
+        M1["1. Acoustic & Pause Engine<br/>Silero VAD v5 (1.8 MB) + Whisper DTW + Rust pYIN DSP (0.4 MB)<br/>Output: Mid-clause pauses, WPM, MLR, Semitone Pitch F0, Rhythm nPVI"]
+        M2["2. Phoneme & Pronunciation Engine<br/>Wav2Vec2-CTC (32 MB) + SpeechOcean762 GOPT (4 MB)<br/>Output: Per-phoneme IPA GOP, Word Stress, L1 Indonesian Transfer"]
+        M3["3. Grammar Error Detection & Correction (GED/GEC)<br/>harper.js WASM (3.2 MB) + DeBERTa-GED / Flan-T5-GEC (55 MB)<br/>Output: Inline Red/Green Diff + ERRANT Error Codes (R:VERB:TENSE, M:DET)"]
+        M4["4. Lexical & Collocation Profiler<br/>Oxford CEFR/AWL SQLite (2.5 MB) + Aho-Corasick 6,500 Collocations<br/>Output: Bidirectional MTLD, A1-C2 Profile, Cliche Penalty"]
+        M5["5. Discourse & Prompt Relevance Cross-Encoder<br/>DeBERTa-v3-xsmall Cross-Encoder (25 MB) + BGE-Small (22 MB)<br/>Output: Per-Bullet Cue Card Coverage & Inter-Sentence Coherence"]
+    end
+
+    subgraph Stage2["STAGE 2: TRAINED PSYCHOMETRIC BAND CALIBRATOR (Macro Band Accuracy)"]
+        direction TB
+        VEC["48-Dimensional Objective Feature Vector x in R^48"]
+        CAL["Trained IELTS Ordinal Calibrator (ONNX, 0.4 MB)<br/>Trained on 10,000+ Examiner-Rated Samples (QWK Loss)"]
+        OUT["Calibrated Output:<br/>- Band FC, LR, GRA, P in {0.0, 0.5, ..., 9.0}<br/>- 95% Confidence Interval (e.g., 7.0 +- 0.25)<br/>- Clickable Word-Level Diagnostic Map"]
+    end
+
+    M1 & M2 & M3 & M4 & M5 --> VEC --> CAL --> OUT
+```
+
+### 4.2 Complete Model & Runtime Inventory
+
+| Tier | Component / Model | Quantized Size | Worker Target | Exact Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **Frontend UI** | React 19 + Vite + TanStack Router + Tailwind v4 | `~180 KB` | Main Thread | Exam interfaces, waveform canvas, diagnostic UI |
-| **Local Database** | `@sqlite.org/sqlite-wasm` (OPFS VFS) | `~850 KB` | `db.worker.ts` | ACID relational storage, FTS5 search, outbox log |
-| **Voice Activity Detection** | **Silero VAD v5** (`silero_vad.onnx`) | **`1.8 MB`** | `audio-dsp.worker.ts` | $30\text{ ms}$ frame speech/silence probabilities |
-| **Acoustic Prosody DSP** | **Rust $\to$ WASM DSP** (`pitch-detection` + `fft`) | **`0.4 MB`** | `audio-dsp.worker.ts` | Pitch contour $F_0(t)$ in semitones & rhythm $\text{nPVI}$ |
-| **Speech-to-Text (ASR)** | **Whisper ONNX** (`whisper-base.en` q8 / WebGPU fp16) | **`74 MB`** | `ai-scorer.worker.ts` | Verbatim transcript, word timestamps, token logprobs |
-| **Phoneme Pronunciation** | **Wav2Vec2-CTC** (`wav2vec2-lv-60-espeak-cv-ft` q8) | **`32 MB`** | `ai-scorer.worker.ts` | IPA forced alignment & Goodness of Pronunciation ($\text{GOP}$) |
-| **Semantic Relevance** | **BGE-Small-EN v1.5** (`bge-small-en-v1.5` q8 ONNX) | **`22 MB`** | `ai-scorer.worker.ts` | $384\text{-d}$ cosine similarity vs. prompt semantic anchors |
-| **Grammar & Syntax Engine** | **Harper WASM** (`harper.js`) + Clause Dependency | **`3.2 MB`** | `ai-scorer.worker.ts` | Sub-$50\text{ ms}$ grammar check + Error-Free Clause ratio |
-| **Lexical Profiler** | **SQLite CEFR/AWL Table + Aho-Corasick Trie** | **`2.5 MB`** | `ai-scorer.worker.ts` | $15,000$ CEFR headwords + $6,500$ IELTS collocations |
-| **Examiner Voice (TTS)** | **Kokoro-82M ONNX** or Pre-Packaged Opus Audio | **`80 MB`** (optional) | `ai-scorer.worker.ts` | Offline British/Australian/US voice for examiner |
-| **Spaced Repetition** | **FSRS v5** (`ts-fsrs`) | `~15 KB` | `db.worker.ts` | Optimal memory scheduling for error flashcards |
-| **Backup Archive** | **fflate** (Streaming ZIP/GZIP) | `~12 KB` | `db.worker.ts` | Zero-RAM-spike `.ieltsbackup` & `.ielts-archive.zip` |
-
-> **Total Core Scoring Footprint**: **$\approx 135\text{ MB}$** cached once in the browser's `Cache API` / `IndexedDB` — **nearly $7\times$ smaller and $10\times$ faster** than running a generative LLM, while working on standard laptops and phones without requiring a dedicated GPU.
+| **Tier 0 (Boot)** | React 19 + SQLite-WASM + FSRS v5 + Question Bank | `~2.2 MB` | Main + `db.worker.ts` | Instant UI, Reading, Listening, Flashcards (`< 1s` load) |
+| **Tier 1 (Fast NLP)** | `harper.js` WASM + CEFR/AWL + Collocation Trie + Calibrator | **`~6.1 MB`** | `ai-scorer.worker.ts` | Instant Writing & Lexical/Grammar baseline (`< 1.5s` download) |
+| **Tier 2 (Speech Core)** | **Silero VAD v5** (`1.8 MB`) + **Rust pYIN DSP** (`0.4 MB`) + **Whisper-base.en** (`74 MB`) | **`~76.2 MB`** | `audio-dsp` + `ai-scorer` | Full verbatim ASR, word timestamps, pause classification, pitch & rhythm |
+| **Tier 3 (Deep Specialist)** | **Wav2Vec2-CTC + GOPT** (`36 MB`) + **Flan-T5-GEC / DeBERTa-GED** (`55 MB`) + **DeBERTa Cross-Encoder** (`25 MB`) | **`~116.0 MB`** | `ai-scorer.worker.ts` | Phoneme IPA forced alignment, ERRANT grammar diffs, bullet-point entailment |
 
 ---
 
-## 5. IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)
+## 5. Zero-Pain Model Delivery: Unlimited Multi-CDN, Multi-Point Parallel Download & Crash-Resilient OPFS Resume
+
+Downloading `~76 MB` (Core Speech) or `~195 MB` (Full Specialist Suite) using a standard single-stream browser `fetch()` is fragile: if the user closes the tab at `90%` or their laptop/phone battery dies, `Cache.put()` discards the entire incomplete stream and forces a `0%` restart.
+
+To guarantee a **zero-pain user experience**, we implement a dedicated **Multi-Point Range Downloader (`model-downloader.worker.ts`)** backed by **OPFS Sparse File Staging** and **Unlimited-Request Multi-Mirror CDNs**.
+
+### 5.1 Unlimited-Request, Zero-Egress Multi-CDN Topology
+
+We use a **3-Tier Content-Addressed CDN Waterfall** with automatic mirror failover and **zero request or bandwidth billing**:
+
+| Priority | CDN Provider | Endpoint Pattern | Why Unlimited & Free? | Capabilities |
+| :--- | :--- | :--- | :--- | :--- |
+| **Primary Mirror** | **HuggingFace Hub LFS Global CDN** (CloudFront / Fastly) | `https://huggingface.co/{org}/{repo}/resolve/{commit_sha}/{file}` | 100% free unlimited bandwidth & unlimited requests for public ONNX models. | Native HTTP/2 & HTTP/3 multiplexing, `Accept-Ranges: bytes` (`206 Partial Content`), immutable commit SHAs. |
+| **Secondary Mirror** | **Cloudflare R2 + Custom Domain Edge Cache** (`Cache Everything`) | `https://cdn.ielts-local.app/models/{sha256_chunk}.bin` | By attaching a Custom Domain to R2 with a Cloudflare Cache Rule (`Cache Everything`, Edge TTL = `1 year`, `Cache-Control: public, max-age=31536000, immutable`), **99.9%+ of requests hit Cloudflare's free CDN Edge (`CF-Cache-Status: HIT`)**, which has **unlimited free requests, zero bandwidth fees, and consumes 0 R2 Class B operations**. | Sub-$15\text{ ms}$ Indonesian/SEA edge latency (Jakarta/Singapore PoPs), HTTP/3 + Range support. |
+| **Tertiary Mirror** | **GitHub Releases + jsDelivr Global CDN** | `https://cdn.jsdelivr.net/gh/rafaelatantya/ielts@{tag}/...` | Unlimited free requests for static Question Packs, CEFR dictionaries, and `< 5 MB` WASM binaries. | Multi-CDN balancing (Cloudflare + Fastly). |
+
+---
+
+### 5.2 Multi-Point Parallel Range Downloader & Crash-Resilient OPFS Resume Architecture (Mermaid)
+
+```mermaid
+flowchart TB
+    subgraph Manifest["1. Content-Addressed Chunk Manifest (models-manifest.json)"]
+        MAN["Model M (e.g. whisper-base-q8.onnx, 74 MB)<br/>Logically partitioned into N = 19 chunks of B = 4 MB (4,194,304 bytes)<br/>Each chunk k in {0..18} has pre-computed SHA-256 hash H_k"]
+    end
+
+    subgraph Downloader["2. model-downloader.worker.ts (Multi-Point Connection Pool)"]
+        BITMAP["Query SQLite `model_download_chunks`<br/>Find missing chunks: {k | status != 'verified'}"]
+        POOL["Parallel Worker Pool (P = 4 to 6 Concurrent HTTP/3 Streams)<br/>Stream 1: GET Range: bytes=0-4194303<br/>Stream 2: GET Range: bytes=4194304-8388607<br/>Stream 3: GET Range: bytes=8388608-12582911<br/>Stream 4: GET Range: bytes=12582912-16777215"]
+        HASH["Verify Chunk Integrity in Web Crypto:<br/>SHA-256(Chunk_k) == H_k ?"]
+    end
+
+    subgraph OPFS_Commit["3. Atomic Per-Chunk Disk Commit (Survives Tab Close / Power Loss)"]
+        WRITE["OPFS FileSystemSyncAccessHandle<br/>handle.write(Chunk_k, { at: k * 4194304 })<br/>handle.flush() -> Committed to Physical Disk!"]
+        SQL_ACK["SQLite Transaction:<br/>INSERT OR REPLACE INTO model_download_chunks<br/>(model_id, chunk_index, status='verified')"]
+        FINAL["All N Chunks Verified?<br/>Verify Full File Root Hash -> Rename .part to .onnx -> Ready!"]
+    end
+
+    MAN --> BITMAP --> POOL --> HASH
+    HASH -->|"Valid"| WRITE --> SQL_ACK --> FINAL
+    HASH -->|"Corrupt / Timeout"| RETRY["Switch CDN Mirror (HF <-> Cloudflare Edge)<br/>& Retry Only Chunk k"] --> POOL
+```
+
+---
+
+### 5.3 Crash-Resilient Resume Sequence: What Happens When User Closes Tab or Device Dies? (Mermaid)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Progressive Model Bar (UI)
+    participant DLW as model-downloader.worker.ts
+    participant SQL as SQLite-WASM (OPFS)
+    participant OPFS as OPFS FileSystemSyncAccessHandle
+    participant CDN as Multi-Mirror CDN (HF / CF Edge)
+
+    User->>UI: Enter Speaking Lab (Needs Tier 2: 76 MB, 19 Chunks x 4 MB)
+    UI->>DLW: ensureModelsReady(['silero-vad', 'whisper-base-en'])
+    DLW->>SQL: SELECT chunk_index FROM model_download_chunks WHERE model_id='whisper' AND status='verified'
+    SQL-->>DLW: Returns [] (0/19 chunks downloaded)
+    DLW->>OPFS: Open /models/whisper-base.onnx.part & truncate(77,594,624)
+
+    par 4 Concurrent Multi-Point Range Connections
+        DLW->>CDN: GET Range: bytes=0-4194303 (Chunk 0)
+        DLW->>CDN: GET Range: bytes=4194304-8388607 (Chunk 1)
+        DLW->>CDN: GET Range: bytes=8388608-12582911 (Chunk 2)
+        DLW->>CDN: GET Range: bytes=12582912-16777215 (Chunk 3)
+    end
+
+    Note over DLW,OPFS: Chunks 0..11 (48 MB / 63%) finish downloading
+    loop For each completed Chunk k in 0..11
+        DLW->>DLW: crypto.subtle.digest('SHA-256', chunk_k) === manifest.hashes[k]
+        DLW->>OPFS: accessHandle.write(chunk_k, { at: k * 4194304 }) + accessHandle.flush()
+        DLW->>SQL: UPDATE model_download_chunks SET status='verified' WHERE chunk_index = k
+        DLW-->>UI: Progress: 63% (48 MB / 76 MB) — Speed: 14.2 MB/s
+    end
+
+    Note over User,CDN: ⚡ SUDDEN CRASH: User closes browser tab OR laptop battery dies at 63%!
+
+    User->>UI: Reopens Browser & Visits App Later
+    UI->>DLW: ensureModelsReady(['whisper-base-en'])
+    DLW->>SQL: SELECT chunk_index FROM model_download_chunks WHERE model_id='whisper' AND status='verified'
+    SQL-->>DLW: Returns [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] (Chunks 0..11 ALREADY ON DISK!)
+    DLW-->>UI: Instant Resume from 63% (48 MB preserved!)
+
+    par Fetch ONLY Missing Chunks 12..18
+        DLW->>CDN: GET Range: bytes=50331648-54525951 (Chunk 12)
+        DLW->>CDN: GET Range: bytes=54525952-58720255 (Chunk 13)
+        DLW->>CDN: GET Range: bytes=58720256-62914559 (Chunk 14)
+        DLW->>CDN: GET Range: bytes=62914560-67108863 (Chunk 15)
+    end
+
+    DLW->>OPFS: Write & flush remaining chunks 12..18 -> Rename to /models/whisper-base.onnx
+    DLW->>SQL: UPDATE model_registry SET status='ready' WHERE model_id='whisper-base-en'
+    DLW-->>UI: 100% Ready — Booting ONNX Session from OPFS ArrayBuffer!
+```
+
+---
+
+### 5.4 Mathematical Formulation of the Multi-Point Chunked Downloader
+
+Let a model artifact $M$ have total byte length $L$ and be divided into $N = \lceil L / B \rceil$ fixed-size chunks of size $B = 4,194,304\text{ bytes}$ ($4\text{ MiB}$).
+
+1. **Byte Interval for Chunk $k \in \{0, 1, \dots, N-1\}$**:
+
+$$
+\text{start}(k) = k \cdot B, \qquad \text{end}(k) = \min\big(L - 1, \; (k + 1) \cdot B - 1\big)
+$$
+
+2. **Per-Chunk Cryptographic Verification**:
+   Before any chunk is marked as committed, its SHA-256 digest must match the manifest hash $H_k$:
+
+$$
+\text{Valid}(k) \iff \text{SHA256}\Big(\text{Buffer}\big[\text{start}(k) : \text{end}(k)\big]\Big) = H_k
+$$
+
+3. **Out-of-Order Sparse OPFS Write**:
+   Because chunks arrive out of order across $P$ parallel HTTP streams (e.g., Chunk 3 finishes before Chunk 1), `FileSystemSyncAccessHandle` writes each verified buffer directly at its exact physical offset $\text{start}(k)$:
+
+```ts
+// Inside model-downloader.worker.ts
+const syncHandle = await opfsFileHandle.createSyncAccessHandle();
+const bytesWritten = syncHandle.write(chunkUint8Array, { at: chunkIndex * 4_194_304 });
+syncHandle.flush(); // Guarantees bytes survive OS/power crash
+```
+
+4. **Dynamic Bandwidth & ETA Estimator (Exponential Moving Average)**:
+   To give the user a smooth, non-jumping progress bar and accurate ETA:
+
+$$
+v_t = \beta \cdot v_{t-1} + (1 - \beta) \cdot \frac{\Delta \text{bytes}_t}{\Delta t}, \qquad \text{ETA}_t = \frac{L - \sum_{k \in \mathcal{V}} \text{size}(k)}{v_t} \quad (\beta = 0.85)
+$$
+
+where $\mathcal{V}$ is the set of already-verified chunk indices in SQLite.
+
+---
+
+## 6. IELTS Speaking Auto-Scoring Engine (Mathematical & DSP Formulation)
 
 ### 5.1 End-to-End Speaking Signal Flow (Mermaid)
 
@@ -427,9 +585,9 @@ $$
 
 ---
 
-## 6. Writing, Reading, Listening & FSRS v5 Study Modules
+## 7. Writing, Reading, Listening & FSRS v5 Study Modules
 
-### 6.1 IELTS Writing Auto-Scoring Lab (Task 1 & Task 2)
+### 7.1 IELTS Writing Auto-Scoring Lab (Task 1 & Task 2)
 - **Pre-Generated Visuals & Ground-Truth Metadata**:
   - **Academic Task 1**: Dynamic SVG bar/line/pie charts, tables, process diagrams, and maps. Each prompt in `prompts` includes a structured ground-truth spec (`key_trends`, `max_min_entities`, `comparison_pairs`, `required_units`). The scorer deterministically checks whether the candidate's essay mentions the required overview trends and numerical comparisons.
   - **Task 2 Essay**: Curated prompts across all 5 official essay types with pre-computed semantic anchor vectors for each prompt question part.
@@ -439,11 +597,11 @@ $$
 \bar{B}_{\text{Writing}} = \frac{B_{\text{Task1}} + 2 \cdot B_{\text{Task2}}}{3}, \qquad B_{\text{Writing}} = \frac{\lfloor 2 \bar{B}_{\text{Writing}} + 0.5 \rfloor}{2}
 $$
 
-### 6.2 Reading & Listening Simulators
+### 7.2 Reading & Listening Simulators
 - **Reading**: 3-passage split-screen interface with persistent highlighters (Yellow/Pink/Cyan), margin notes, all 14 official question types, and 1-click **Evidence Span Jump** on post-test review.
 - **Listening**: 4-section Opus audio player (`24 kbps`, $\approx 4.5\text{ MB}$ per full 30-minute test) + deterministic **Answer Normalizer** handling UK/US spelling (`colour`/`color`), number/word equivalence (`14`/`fourteen`), date formats, and optional bracketed tokens.
 
-### 6.3 FSRS v5 Automated Spaced Repetition (`ts-fsrs`)
+### 7.3 FSRS v5 Automated Spaced Repetition (`ts-fsrs`)
 After every Speaking or Writing test, the platform automatically generates flashcards from the user's actual mistakes (mispronounced words with IPA + audio comparison, grammar error cloze cards, and C1 collocation upgrades).
 For a card with stability $S$ (days) and elapsed time $t$ (days), FSRS v5 models retrievability $R(t, S)$ as:
 
@@ -453,9 +611,9 @@ $$
 
 ---
 
-## 7. Local-First Storage Architecture & ER Schema (Mermaid + SQL)
+## 8. Local-First Storage Architecture & ER Schema (Mermaid + SQL)
 
-### 7.1 Local SQLite-WASM Entity-Relationship Diagram (Mermaid)
+### 8.1 Local SQLite-WASM Entity-Relationship Diagram (Mermaid)
 
 ```mermaid
 erDiagram
@@ -467,6 +625,7 @@ erDiagram
     STUDY_SESSIONS ||--|{ RECEPTIVE_ATTEMPTS : "contains"
     SPEAKING_ATTEMPTS ||--o{ SRS_CARDS : "generates"
     WRITING_ATTEMPTS ||--o{ SRS_CARDS : "generates"
+    MODEL_REGISTRY ||--|{ MODEL_DOWNLOAD_CHUNKS : "resumable chunks"
 
     PROMPTS {
         TEXT id PK "e.g. spk_p2_tech_042"
@@ -503,7 +662,7 @@ erDiagram
         TEXT word_timestamps_json "Word timings, posteriors, GOP, pauses"
         TEXT acoustic_metrics_json "WPM, AR, PTR, MLR, F0_ST, nPVI"
         TEXT lexical_metrics_json "MTLD, CEFR dist, collocations"
-        TEXT grammar_metrics_json "EFC ratio, SCR, Harper errors"
+        TEXT grammar_metrics_json "EFC ratio, SCR, ERRANT diffs"
         REAL band_fc
         REAL band_lr
         REAL band_gra
@@ -561,6 +720,28 @@ erDiagram
         INTEGER is_deleted
     }
 
+    MODEL_REGISTRY {
+        TEXT model_id PK "e.g. whisper-base-en-q8"
+        INTEGER tier "1, 2, or 3"
+        INTEGER total_bytes "Total file size"
+        INTEGER chunk_size_bytes "4194304 (4 MiB)"
+        INTEGER total_chunks "Ceiling(total_bytes / 4 MiB)"
+        TEXT root_sha256 "Full file integrity digest"
+        TEXT opfs_path "/models/whisper-base.onnx"
+        TEXT status "not_downloaded | downloading | paused | ready | corrupted"
+        INTEGER updated_at
+    }
+
+    MODEL_DOWNLOAD_CHUNKS {
+        TEXT model_id PK, FK
+        INTEGER chunk_index PK "0 .. total_chunks - 1"
+        INTEGER byte_offset "chunk_index * 4194304"
+        INTEGER byte_length "Chunk size in bytes"
+        TEXT expected_sha256 "Manifest hash H_k"
+        TEXT status "pending | downloading | verified"
+        INTEGER verified_at "Unix ms when flushed to OPFS"
+    }
+
     SYNC_OUTBOX {
         TEXT hlc PK "Monotonic HLC timestamp"
         TEXT table_name "Target entity table"
@@ -571,7 +752,7 @@ erDiagram
     }
 ```
 
-### 7.2 Complete SQLite-WASM Database Schema (`schema.sql`)
+### 8.2 Complete SQLite-WASM Database Schema (`schema.sql`)
 
 ```sql
 PRAGMA journal_mode = WAL;
@@ -583,6 +764,36 @@ CREATE TABLE IF NOT EXISTS local_meta (
     value TEXT NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+-- Crash-Resilient Multi-Point Model Download State Tables
+CREATE TABLE IF NOT EXISTS model_registry (
+    model_id TEXT PRIMARY KEY,                -- e.g., 'whisper-base-en-q8'
+    tier INTEGER NOT NULL,                    -- 1, 2, or 3
+    total_bytes INTEGER NOT NULL,
+    chunk_size_bytes INTEGER NOT NULL DEFAULT 4194304,
+    total_chunks INTEGER NOT NULL,
+    root_sha256 TEXT NOT NULL,
+    opfs_path TEXT NOT NULL,                  -- '/models/whisper-base-en-q8.onnx'
+    primary_url TEXT NOT NULL,                -- HuggingFace LFS CDN URL
+    mirror_url TEXT NOT NULL,                 -- Cloudflare R2 Custom Domain Edge URL
+    status TEXT NOT NULL DEFAULT 'not_downloaded', -- 'not_downloaded' | 'downloading' | 'paused' | 'ready'
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS model_download_chunks (
+    model_id TEXT NOT NULL REFERENCES model_registry(model_id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,             -- 0 .. total_chunks - 1
+    byte_offset INTEGER NOT NULL,             -- chunk_index * 4194304
+    byte_length INTEGER NOT NULL,
+    expected_sha256 TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'downloading' | 'verified'
+    verified_at INTEGER,
+    PRIMARY KEY (model_id, chunk_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_chunks_pending
+    ON model_download_chunks(model_id, status)
+    WHERE status != 'verified';
 
 CREATE TABLE IF NOT EXISTS prompts (
     id TEXT PRIMARY KEY,
@@ -713,9 +924,9 @@ CREATE INDEX IF NOT EXISTS idx_outbox_unsynced ON sync_outbox(synced_at) WHERE s
 
 ---
 
-## 8. Deterministic Export & Import System (Backup / Restore / CRDT Merge)
+## 9. Deterministic Export & Import System (Backup / Restore / CRDT Merge)
 
-### 8.1 Export & Import State Machine (Mermaid)
+### 9.1 Export & Import State Machine (Mermaid)
 
 ```mermaid
 flowchart TD
@@ -737,7 +948,7 @@ flowchart TD
     OVERWRITE --> DONE
 ```
 
-### 8.2 Mathematical Guarantee of CRDT / HLC Smart Merge
+### 9.2 Mathematical Guarantee of CRDT / HLC Smart Merge
 Let $S_{\text{local}}$ and $S_{\text{import}}$ be two database states (e.g., from a user's laptop and phone). Every mutable row $x$ identified by primary key $k$ carries a strictly totally ordered Hybrid Logical Clock timestamp $\text{hlc}(x)$. The merged state $S_{\text{merged}}$ for key $k$ is defined as a **Last-Write-Wins Element-Set (LWW-Element-Set) join-semilattice**:
 
 $$
@@ -753,9 +964,9 @@ Because this join operation $\sqcup$ is **commutative** ($A \sqcup B = B \sqcup 
 
 ---
 
-## 9. Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)
+## 10. Google OAuth 2.0 & Multi-Device HLC Sync Protocol (Mermaid)
 
-### 9.1 Sequence Diagram: Google Login (PKCE), Guest Data Claim & HLC Delta Sync
+### 10.1 Sequence Diagram: Google Login (PKCE), Guest Data Claim & HLC Delta Sync
 
 ```mermaid
 sequenceDiagram
@@ -804,7 +1015,7 @@ sequenceDiagram
     end
 ```
 
-### 9.2 Hybrid Logical Clock (HLC) Format
+### 10.2 Hybrid Logical Clock (HLC) Format
 Every local or remote mutation is stamped with a fixed-width, lexicographically sortable HLC string:
 
 $$
@@ -813,7 +1024,7 @@ $$
 
 ---
 
-## 10. Cloudflare Free-Tier Capacity Math & Cost Guardrails
+## 11. Cloudflare Free-Tier Capacity Math & Cost Guardrails
 
 All heavy compute (ASR, pitch DSP, grammar checking, semantic embeddings, and SQLite queries) executes on the **client device**. Cloudflare only verifies Google OAuth tokens and stores tiny compressed JSON deltas.
 
@@ -828,9 +1039,9 @@ All heavy compute (ASR, pitch DSP, grammar checking, semantic embeddings, and SQ
 
 ---
 
-## 11. Security, Privacy & Cross-Origin Isolation
+## 12. Security, Privacy & Cross-Origin Isolation
 
-### 11.1 Cross-Origin Isolation Headers (`apps/web/public/_headers`)
+### 12.1 Cross-Origin Isolation Headers (`apps/web/public/_headers`)
 To enable multi-threaded WebAssembly (`SharedArrayBuffer` for ONNX Runtime Web) while keeping Google OAuth popups/redirects and CDN model downloads working seamlessly:
 
 ```text
@@ -844,9 +1055,9 @@ To enable multi-threaded WebAssembly (`SharedArrayBuffer` for ONNX Runtime Web) 
 
 ---
 
-## 12. Monorepo Structure & Phased Implementation Roadmap
+## 13. Monorepo Structure & Phased Implementation Roadmap
 
-### 12.1 Repository Layout (Mermaid)
+### 13.1 Repository Layout (Mermaid)
 
 ```mermaid
 flowchart LR
@@ -855,20 +1066,21 @@ flowchart LR
     ROOT --> DSP["packages/dsp-wasm/<br/>pYIN Pitch & nPVI Rhythm Algorithms"]
     ROOT --> API["workers/api/<br/>Cloudflare Worker (Hono + D1 + R2 + Google OIDC)"]
 
-    WEB --> W_WORKERS["src/workers/<br/>- db.worker.ts<br/>- audio-dsp.worker.ts<br/>- ai-scorer.worker.ts<br/>- sync.worker.ts"]
-    WEB --> W_BANK["public/data/<br/>- questions/*.json (Pre-generated Bank)<br/>- cefr-lexicon.json<br/>- collocations.json"]
+    WEB --> W_WORKERS["src/workers/<br/>- db.worker.ts<br/>- model-downloader.worker.ts<br/>- audio-dsp.worker.ts<br/>- ai-scorer.worker.ts<br/>- sync.worker.ts"]
+    WEB --> W_BANK["public/data/<br/>- models-manifest.json (Chunk SHA-256s)<br/>- questions/*.json (Pre-generated Bank)<br/>- cefr-lexicon.json<br/>- collocations.json"]
 ```
 
-### 12.2 Phased Implementation Roadmap
+### 13.2 Phased Implementation Roadmap
 
-1. **Phase 1: Core Foundation, HLC, SQLite-WASM OPFS & Backup Engine**
+1. **Phase 1: Core Foundation, HLC, SQLite-WASM OPFS, Multi-Point Resumable Model Downloader & Backup Engine**
    - Initialize workspace (`apps/web`, `packages/shared`, `workers/api`).
    - Implement Hybrid Logical Clock (`hlc.ts`), SQLite-WASM OPFS schema (`schema.sql`), and deterministic `.ieltsbackup` / `.ielts-archive.zip` Export & CRDT Smart Merge Import.
-2. **Phase 2: Pre-Generated Question Bank & Deterministic Speaking/Writing Scorers**
+   - Implement `model-downloader.worker.ts` with 4-stream HTTP Range requests, per-chunk SHA-256 verification, OPFS `FileSystemSyncAccessHandle` sparse writes + `flush()`, and crash-resilient resume via `model_download_chunks`.
+2. **Phase 2: Pre-Generated Question Bank & Two-Stage Specialist Scoring Engine**
    - Seed curated Speaking (Part 1/2/3), Writing (Task 1 SVG charts + Task 2), Reading, and Listening question packs with pre-computed semantic anchors and target collocations.
-   - Implement the 4 mathematical scoring engines ($\text{FC}, \text{LR}, \text{GRA}, \text{P}$) + official half-band rounding + unit tests.
-3. **Phase 3: Real-Time Audio Worklet, VAD, Prosody DSP & Whisper/Wav2Vec2 Worker**
-   - Wire `AudioWorkletProcessor` ($16\text{ kHz}$ PCM) + `MediaRecorder` (Opus to OPFS) + Silero VAD v5 + Pitch/nPVI DSP + Whisper ONNX + `harper.js` + `bge-small-en-v1.5`.
+   - Implement the 5 Specialist Extractors + Stage 2 Trained Psychometric Band Calibrator ($\text{FC}, \text{LR}, \text{GRA}, \text{P}$) + official half-band rounding + unit tests.
+3. **Phase 3: Real-Time Audio Worklet, VAD, Prosody DSP & ONNX Worker Integration**
+   - Wire `AudioWorkletProcessor` ($16\text{ kHz}$ PCM) + `MediaRecorder` (Opus to OPFS) + Silero VAD v5 + Pitch/nPVI DSP + Whisper ONNX + Wav2Vec2-GOPT + Flan-T5-GEC/DeBERTa.
 4. **Phase 4: Interactive Exam Simulators & FSRS v5 Review Deck UI**
    - Build Speaking Mock Room (with clickable word-timestamp replay & pitch contour visualization), Writing Split-Editor, Reading 3-Pane Annotator, Listening Player, and FSRS v5 Flashcard UI.
 5. **Phase 5: Cloudflare Edge Worker, Google OAuth 2.0 & Multi-Device Delta Sync**
